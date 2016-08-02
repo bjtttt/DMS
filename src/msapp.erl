@@ -1,14 +1,12 @@
-%%%
-%%%
-%%%
+%
+% msapp.erl
+%
 
 -module(msapp).
 
 -behaviour(application).
 
 -include("..\include\header.hrl").
-
-%-export([start_client_vdr/1]).
 
 -export([start/2, stop/1]).
 
@@ -25,65 +23,47 @@
 %application:start(sasl).
 %application:start(msapp).
 
-%%%
-%%% rawdisplay  : 0 -> error_logger
-%%%               1 -> terminal
-%%% display     : 1 -> no log
-%%%               1 -> log
-%%%
+%
+% rawdisplay  : 0 -> error_logger
+%               1 -> terminal
+% display     : 1 -> no log
+%               1 -> log
+%
 start(StartType, StartArgs) ->
-	Len = length(StartArgs),
-	case Len of
-		14 ->
-			startserver(StartType, StartArgs);
-		_ ->
-			common:loginfo("Parameter count error : ~p", [Len])
-	end.
+    Len = length(StartArgs),
+    if
+        Len == 2 ->
+            startserver(StartType, StartArgs);
+        true ->
+            common:loginfo("Parameter count error : ~p", [Len])
+    end.
 
-init_httpgps_state(HttpGpsServer) when is_list(HttpGpsServer),
-									   length(HttpGpsServer) > 0 ->
-	common:loginfo("HTTP GPS service is enabled : ~p", [HttpGpsServer]),
-	1;
-init_httpgps_state(HttpGpsServer) ->
-	common:loginfo("HTTP GPS service is disabled : ~p", [HttpGpsServer]),
-	0.
-
+%
+% Parameters:
+%   redis   : 1         -> use Redis
+%             others    -> doesn't use Redis
+%   HttpGps : 1         -> use HttpGps server
+%             others    -> doesn't use HttpGps server
+%
 startserver(StartType, StartArgs) ->
-    [PortVDR, PortMon, PortMP, WS, PortWS, DB, DBName, DBUid, DBPwd, MaxR, MaxT, Mode, Path, HttpGpsServer] = StartArgs,
-    AppPid = self(),
+    [UseRedis, UseHttpGps] = StartArgs,
     ets:new(msgservertable,[set,public,named_table,{keypos,1},{read_concurrency,true},{write_concurrency,true}]),
-    ets:insert(msgservertable, {portvdr, PortVDR}),
-    ets:insert(msgservertable, {portmon, PortMon}),
-    ets:insert(msgservertable, {portmp, PortMP}),
-    ets:insert(msgservertable, {ws, WS}),
-    ets:insert(msgservertable, {portws, PortWS}),
-    ets:insert(msgservertable, {db, DB}),
-    ets:insert(msgservertable, {dbname, DBName}),
-    ets:insert(msgservertable, {dbuid, DBUid}),
-    ets:insert(msgservertable, {dbpwd, DBPwd}),
-    ets:insert(msgservertable, {maxr, MaxR}),
-    ets:insert(msgservertable, {maxt, MaxT}),
-    ets:insert(msgservertable, {mode, Mode}),
-    ets:insert(msgservertable, {path, Path}),
-	%HttpGpsServer = "58.246.201.138:8081",
-	HttpGps = init_httpgps_state(HttpGpsServer),
-	ets:insert(msgservertable, {httpgpsserver, HttpGpsServer}),
-    ets:insert(msgservertable, {dbpid, undefined}),
-    ets:insert(msgservertable, {wspid, undefined}),
-    ets:insert(msgservertable, {linkpid, undefined}),
-	ets:insert(msgservertable, {dboperationpid, undefined}),
-	ets:insert(msgservertable, {dbmaintainpid, undefined}),
-	if
-		Mode == 2 orelse Mode == 1 ->
-			ets:insert(msgservertable, {dbstate, true});
-		true ->
-			ets:insert(msgservertable, {dbstate, false})
-	end,
-    ets:insert(msgservertable, {apppid, AppPid}),
+    if
+        UseRedis == 1 ->
+            ets:insert(msgservertable, {useredis, 1});
+        true ->
+            ets:insert(msgservertable, {useredis, 0});
+    end,
+    if
+        UseHttpGps == 1 ->
+            ets:insert(msgservertable, {usehttpgps, 1});
+        true ->
+            ets:insert(msgservertable, {usehttpgps, 0})
+    end,
+    ets:insert(msgservertable, {redispid, undefined}),
+	ets:insert(msgservertable, {redisoperationpid, undefined}),
+    ets:insert(msgservertable, {apppid, self()}),
     ets:insert(msgservertable, {dblog, []}),
-    ets:insert(msgservertable, {wslog, []}),
-    common:loginfo("StartType : ~p", [StartType]),
-    common:loginfo("StartArgs : ~p", [StartArgs]),
     ets:new(alarmtable,[bag,public,named_table,{keypos,#alarmitem.vehicleid},{read_concurrency,true},{write_concurrency,true}]),
     ets:new(vdrdbtable,[ordered_set,public,named_table,{keypos,#vdrdbitem.authencode},{read_concurrency,true},{write_concurrency,true}]),
     ets:new(vdrtable,[ordered_set,public,named_table,{keypos,#vdritem.socket},{read_concurrency,true},{write_concurrency,true}]),

@@ -2,13 +2,15 @@
 %%%
 %%%
 
+-define(DEF_PORT_MYSQL, 3306).
+-define(DEF_PORT_VDR, 6000).
+-define(DEF_PORT_MON, 6001).
+
+-define(DEF_HTTPGPS_SERVER, "58.246.201.138:8081").
+
 -define(SUP_WAIT_INTVL_MS, 5000).
 
 -define(MAX_VDR_ERR_COUNT, 3).
-
--define(DEF_PORT_DB, 3306).
--define(DEF_PORT_VDR, 6000).
--define(DEF_PORT_MON, 6001).
 
 -define(DB_HASH_UPDATE_INTERVAL, 3*60*60*1000).
 -define(DB_HASH_UPDATE_ONCE_COUNT, 2000).
