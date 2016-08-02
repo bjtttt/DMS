@@ -24,10 +24,7 @@
 %application:start(msapp).
 
 %
-% rawdisplay  : 0 -> error_logger
-%               1 -> terminal
-% display     : 1 -> no log
-%               1 -> log
+%
 %
 start(StartType, StartArgs) ->
     Len = length(StartArgs),
@@ -47,7 +44,7 @@ start(StartType, StartArgs) ->
 %
 startserver(StartType, StartArgs) ->
     [UseRedis, UseHttpGps] = StartArgs,
-    ets:new(msgservertable,[set,public,named_table,{keypos,1},{read_concurrency,true},{write_concurrency,true}]),
+    ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
     if
         UseRedis == 1 ->
             ets:insert(msgservertable, {useredis, 1});
@@ -64,46 +61,48 @@ startserver(StartType, StartArgs) ->
 	ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),
     ets:insert(msgservertable, {dblog, []}),
-    ets:new(alarmtable,[bag,public,named_table,{keypos,#alarmitem.vehicleid},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(vdrdbtable,[ordered_set,public,named_table,{keypos,#vdrdbitem.authencode},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(vdrtable,[ordered_set,public,named_table,{keypos,#vdritem.socket},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(mantable,[set,public,named_table,{keypos,#manitem.socket},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(usertable,[set,public,named_table,{keypos,#user.id},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(drivertable,[set,public,named_table,{keypos,#driverinfo.driverid},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(lastpostable,[set,public,named_table,{keypos,#lastposinfo.vehicleid},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(montable,[set,public,named_table,{keypos,#monitem.socket},{read_concurrency,true},{write_concurrency,true}]),
-    %ets:new(vdronlinetable,[set,public,named_table,{keypos,#vdronlineitem.id},{read_concurrency,true},{write_concurrency,true}]),
+    
+    % Need revisit
+    ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(vdrdbtable,   [ordered_set, public, named_table, {keypos, #vdrdbitem.authencode},  {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(vdrtable,     [ordered_set, public, named_table, {keypos, #vdritem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(mantable,     [set,         public, named_table, {keypos, #manitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(usertable,    [set,         public, named_table, {keypos, #user.id},               {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(drivertable,  [set,         public, named_table, {keypos, #driverinfo.driverid},   {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(lastpostable, [set,         public, named_table, {keypos, #lastposinfo.vehicleid}, {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
     common:loginfo("Tables are initialized."),
-	case file:make_dir(Path ++ "/log") of
+    
+	case file:make_dir(DEF_LOG_PATH ++ "/log") of
 		ok ->
-			common:loginfo("Successfully create directory log");
-		{error, DirError0} ->
-			common:loginfo("Cannot create directory media : ~p", [DirError0])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log"]);
+		{error, DirEx0} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log", DirEx0])
 	end,
-	case file:make_dir(Path ++ "/log/vdr") of
+	case file:make_dir(DEF_LOG_PATH ++ "/log/vdr") of
 		ok ->
-			common:loginfo("Successfully create directory vdr");
-		{error, DirError00} ->
-			common:loginfo("Cannot create directory media : ~p", [DirError00])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log/vdr"]);
+		{error, DirEx1} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/vdr", DirEx1])
 	end,
-	case file:make_dir(Path ++ "/media") of
+	case file:make_dir(DEF_LOG_PATH ++ "/media") of
 		ok ->
-			common:loginfo("Successfully create directory media");
-		{error, DirError1} ->
-			common:loginfo("Cannot create directory media : ~p", [DirError1])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/media"]);
+		{error, DirEx2} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/media", DirEx2])
 	end,
-	case file:make_dir(Path ++ "/upgrade") of
+	case file:make_dir(DEF_LOG_PATH ++ "/upgrade") of
 		ok ->
-			common:loginfo("Successfully create directory upgrade");
-		{error, DirError2} ->
-			common:loginfo("Cannot create directory upgrade : ~p", [DirError2])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/upgrade"]);
+		{error, DirEx3} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/upgrade", DirEx3])
 	end,
+    common:loginfo("Directories are initialized."),
+    
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            common:loginfo("Message server starts"),
-            common:loginfo("Application PID is ~p", [AppPid]),
-            common:loginfo("Supervisor PID : ~p", [SupPid]),
+            common:loginfo("Dynamic Message Server starts.\nApplication PID : ~p\nSupervisor PID : ~p", [AppPid, SupPid]),
             case receive_db_ws_init_msg(false, false, 0, Mode) of
                 ok ->
                     mysql:utf8connect(conn, DB, undefined, DBUid, DBPwd, DBName, true),

@@ -6,7 +6,12 @@
 -define(DEF_PORT_VDR, 6000).
 -define(DEF_PORT_MON, 6001).
 
+-define(DEF_MYSQL_DB_NAME, "gps_database").
+-define(DEF_MYSQL_USERNAME, "optimus").
+-define(DEF_MYSQL_PASSWORD, "opt123450").
 -define(DEF_HTTPGPS_SERVER, "58.246.201.138:8081").
+
+-define (DEF_LOG_PATH, "/tmp").
 
 -define(SUP_WAIT_INTVL_MS, 5000).
 
