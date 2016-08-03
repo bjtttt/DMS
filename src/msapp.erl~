@@ -1,14 +1,12 @@
-%%%
-%%%
-%%%
+%
+% msapp.erl
+%
 
 -module(msapp).
 
 -behaviour(application).
 
--include("header.hrl").
-
-%-export([start_client_vdr/1]).
+-include("../include/header.hrl").
 
 -export([start/2, stop/1]).
 
@@ -25,105 +23,94 @@
 %application:start(sasl).
 %application:start(msapp).
 
-%%%
-%%% rawdisplay  : 0 -> error_logger
-%%%               1 -> terminal
-%%% display     : 1 -> no log
-%%%               1 -> log
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start(StartType, StartArgs) ->
-	Len = length(StartArgs),
-	case Len of
-		14 ->
-			startserver(StartType, StartArgs);
-		_ ->
-			common:loginfo("Parameter count error : ~p", [Len])
-	end.
+    Len = length(StartArgs),
+    if
+        Len == 2 ->
+            startserver(StartType, StartArgs);
+        true ->
+            common:loginfo("Parameter count error : ~p", [Len])
+    end.
 
-init_httpgps_state(HttpGpsServer) when is_list(HttpGpsServer),
-									   length(HttpGpsServer) > 0 ->
-	common:loginfo("HTTP GPS service is enabled : ~p", [HttpGpsServer]),
-	1;
-init_httpgps_state(HttpGpsServer) ->
-	common:loginfo("HTTP GPS service is disabled : ~p", [HttpGpsServer]),
-	0.
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameters:
+%   redis   : 1         -> use Redis
+%             others    -> doesn't use Redis, for the capacity test
+%   HttpGps : 1         -> use HttpGps server
+%             others    -> doesn't use HttpGps server
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 startserver(StartType, StartArgs) ->
-    [PortVDR, PortMon, PortMP, WS, PortWS, DB, DBName, DBUid, DBPwd, MaxR, MaxT, Mode, Path, HttpGpsServer] = StartArgs,
-    AppPid = self(),
-    ets:new(msgservertable,[set,public,named_table,{keypos,1},{read_concurrency,true},{write_concurrency,true}]),
-    ets:insert(msgservertable, {portvdr, PortVDR}),
-    ets:insert(msgservertable, {portmon, PortMon}),
-    ets:insert(msgservertable, {portmp, PortMP}),
-    ets:insert(msgservertable, {ws, WS}),
-    ets:insert(msgservertable, {portws, PortWS}),
-    ets:insert(msgservertable, {db, DB}),
-    ets:insert(msgservertable, {dbname, DBName}),
-    ets:insert(msgservertable, {dbuid, DBUid}),
-    ets:insert(msgservertable, {dbpwd, DBPwd}),
-    ets:insert(msgservertable, {maxr, MaxR}),
-    ets:insert(msgservertable, {maxt, MaxT}),
-    ets:insert(msgservertable, {mode, Mode}),
-    ets:insert(msgservertable, {path, Path}),
-	%HttpGpsServer = "58.246.201.138:8081",
-	HttpGps = init_httpgps_state(HttpGpsServer),
-	ets:insert(msgservertable, {httpgpsserver, HttpGpsServer}),
-    ets:insert(msgservertable, {dbpid, undefined}),
-    ets:insert(msgservertable, {wspid, undefined}),
-    ets:insert(msgservertable, {linkpid, undefined}),
-	ets:insert(msgservertable, {dboperationpid, undefined}),
-	ets:insert(msgservertable, {dbmaintainpid, undefined}),
-	if
-		Mode == 2 orelse Mode == 1 ->
-			ets:insert(msgservertable, {dbstate, true});
-		true ->
-			ets:insert(msgservertable, {dbstate, false})
-	end,
-    ets:insert(msgservertable, {apppid, AppPid}),
+    [UseRedis, UseHttpGps] = StartArgs,
+    ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
+    if
+        UseRedis == 1 ->
+            ets:insert(msgservertable, {useredis, 1});
+        true ->
+            ets:insert(msgservertable, {useredis, 0});
+    end,
+    if
+        UseHttpGps == 1 ->
+            ets:insert(msgservertable, {usehttpgps, 1});
+        true ->
+            ets:insert(msgservertable, {usehttpgps, 0})
+    end,
+    ets:insert(msgservertable, {redispid, undefined}),
+	ets:insert(msgservertable, {redisoperationpid, undefined}),
+    ets:insert(msgservertable, {apppid, self()}),
     ets:insert(msgservertable, {dblog, []}),
-    ets:insert(msgservertable, {wslog, []}),
-    common:loginfo("StartType : ~p", [StartType]),
-    common:loginfo("StartArgs : ~p", [StartArgs]),
-    ets:new(alarmtable,[bag,public,named_table,{keypos,#alarmitem.vehicleid},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(vdrdbtable,[ordered_set,public,named_table,{keypos,#vdrdbitem.authencode},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(vdrtable,[ordered_set,public,named_table,{keypos,#vdritem.socket},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(mantable,[set,public,named_table,{keypos,#manitem.socket},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(usertable,[set,public,named_table,{keypos,#user.id},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(drivertable,[set,public,named_table,{keypos,#driverinfo.driverid},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(lastpostable,[set,public,named_table,{keypos,#lastposinfo.vehicleid},{read_concurrency,true},{write_concurrency,true}]),
-    ets:new(montable,[set,public,named_table,{keypos,#monitem.socket},{read_concurrency,true},{write_concurrency,true}]),
-    %ets:new(vdronlinetable,[set,public,named_table,{keypos,#vdronlineitem.id},{read_concurrency,true},{write_concurrency,true}]),
+    
+    % Need revisit
+    ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(vdrdbtable,   [ordered_set, public, named_table, {keypos, #vdrdbitem.authencode},  {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(vdrtable,     [ordered_set, public, named_table, {keypos, #vdritem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(mantable,     [set,         public, named_table, {keypos, #manitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(usertable,    [set,         public, named_table, {keypos, #user.id},               {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(drivertable,  [set,         public, named_table, {keypos, #driverinfo.driverid},   {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(lastpostable, [set,         public, named_table, {keypos, #lastposinfo.vehicleid}, {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
     common:loginfo("Tables are initialized."),
-	case file:make_dir(Path ++ "/log") of
+    
+	case file:make_dir(DEF_LOG_PATH ++ "/log") of
 		ok ->
-			common:loginfo("Successfully create directory log");
-		{error, DirError0} ->
-			common:loginfo("Cannot create directory media : ~p", [DirError0])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log"]);
+		{error, DirEx0} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log", DirEx0])
 	end,
-	case file:make_dir(Path ++ "/log/vdr") of
+	case file:make_dir(DEF_LOG_PATH ++ "/log/vdr") of
 		ok ->
-			common:loginfo("Successfully create directory vdr");
-		{error, DirError00} ->
-			common:loginfo("Cannot create directory media : ~p", [DirError00])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log/vdr"]);
+		{error, DirEx1} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/vdr", DirEx1])
 	end,
-	case file:make_dir(Path ++ "/media") of
+	case file:make_dir(DEF_LOG_PATH ++ "/log/redis") of
 		ok ->
-			common:loginfo("Successfully create directory media");
-		{error, DirError1} ->
-			common:loginfo("Cannot create directory media : ~p", [DirError1])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log/redis"]);
+		{error, DirEx1} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/redis", DirEx1])
 	end,
-	case file:make_dir(Path ++ "/upgrade") of
+	case file:make_dir(DEF_LOG_PATH ++ "/media") of
 		ok ->
-			common:loginfo("Successfully create directory upgrade");
-		{error, DirError2} ->
-			common:loginfo("Cannot create directory upgrade : ~p", [DirError2])
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/media"]);
+		{error, DirEx2} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/media", DirEx2])
 	end,
+	case file:make_dir(DEF_LOG_PATH ++ "/upgrade") of
+		ok ->
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/upgrade"]);
+		{error, DirEx3} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/upgrade", DirEx3])
+	end,
+    common:loginfo("Directories are initialized."),
+    
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            common:loginfo("Message server starts"),
-            common:loginfo("Application PID is ~p", [AppPid]),
-            common:loginfo("Supervisor PID : ~p", [SupPid]),
+            common:loginfo("Dynamic Message Server starts.~nApplication PID : ~p~nSupervisor PID : ~p", [AppPid, SupPid]),
             case receive_db_ws_init_msg(false, false, 0, Mode) of
                 ok ->
                     mysql:utf8connect(conn, DB, undefined, DBUid, DBPwd, DBName, true),

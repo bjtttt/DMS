@@ -6,7 +6,7 @@
 
 -behaviour(application).
 
--include("..\include\header.hrl").
+-include("../include/header.hrl").
 
 -export([start/2, stop/1]).
 
@@ -23,9 +23,9 @@
 %application:start(sasl).
 %application:start(msapp).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%
-%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start(StartType, StartArgs) ->
     Len = length(StartArgs),
     if
@@ -35,13 +35,16 @@ start(StartType, StartArgs) ->
             common:loginfo("Parameter count error : ~p", [Len])
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Parameters:
 %   redis   : 1         -> use Redis
-%             others    -> doesn't use Redis
+%             others    -> doesn't use Redis, for the capacity test
 %   HttpGps : 1         -> use HttpGps server
 %             others    -> doesn't use HttpGps server
 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 startserver(StartType, StartArgs) ->
     [UseRedis, UseHttpGps] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
@@ -85,6 +88,12 @@ startserver(StartType, StartArgs) ->
 		{error, DirEx1} ->
 			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/vdr", DirEx1])
 	end,
+	case file:make_dir(DEF_LOG_PATH ++ "/log/redis") of
+		ok ->
+			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log/redis"]);
+		{error, DirEx1} ->
+			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/redis", DirEx1])
+	end,
 	case file:make_dir(DEF_LOG_PATH ++ "/media") of
 		ok ->
 			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/media"]);
@@ -102,7 +111,7 @@ startserver(StartType, StartArgs) ->
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            common:loginfo("Dynamic Message Server starts.\nApplication PID : ~p\nSupervisor PID : ~p", [AppPid, SupPid]),
+            common:loginfo("Dynamic Message Server starts.~nApplication PID : ~p~nSupervisor PID : ~p", [AppPid, SupPid]),
             case receive_db_ws_init_msg(false, false, 0, Mode) of
                 ok ->
                     mysql:utf8connect(conn, DB, undefined, DBUid, DBPwd, DBName, true),
