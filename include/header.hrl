@@ -1,17 +1,42 @@
-%%%
-%%%
-%%%
+%
+% header.hrl
+%
 
--define(DEF_PORT_MYSQL, 3306).
--define(DEF_PORT_VDR, 6000).
--define(DEF_PORT_MON, 6001).
+-define(DEF_PORT_MYSQL,	3306).
+-define(DEF_PORT_VDR,	6000).
+-define(DEF_PORT_MON, 	6001).
 
--define(DEF_MYSQL_DB_NAME, "gps_database").
+-define(DEF_MYSQL_DB_NAME,	"gps_database").
 -define(DEF_MYSQL_USERNAME, "optimus").
 -define(DEF_MYSQL_PASSWORD, "opt123450").
 -define(DEF_HTTPGPS_SERVER, "58.246.201.138:8081").
 
--define (DEF_LOG_PATH, "/tmp").
+-define(DEF_LOG_PATH, "/tmp").
+
+
+-define(CONN_STAT_TEST,         0).	%
+-define(CONN_STAT_CONN,         1).	% Count for VDR connections
+-define(CONN_STAT_DISC_CHAR,    2). % Disconnection count due to invalid characters in the message from VDR to the gateway
+-define(CONN_STAT_DISC_REG,     3). % Disconnection count due to unregiestered VDR
+-define(CONN_STAT_DISC_AUTH,    4). % Disconnection count due to error information from anthorized VDR
+-define(CONN_STAT_DISC_UNAUTH,  5). % Disconnection count due to unanthorized VDR
+-define(CONN_STAT_DISC_ERR,     6). % Disconnection count due to VDR commununication error
+-define(CONN_STAT_DISC_CLI,     7). % Disconnection count due to VDR requirement
+-define(CONN_STAT_DISC_LEN,     8). % Disconnection count due to MSG length error
+-define(CONN_STAT_DISC_PARITY,  9). % Disconnection count due to MSG parity error
+-define(CONN_STAT_DISC_SPLIT,  10). % Disconnection count due to multi MSGes splitting error
+-define(CONN_STAT_DISC_REST,   11). % Disconnection count due to other MSG error, such as format and etc., which will lead to parse error
+-define(CONN_STAT_DISC_PACK,   12). % Disconnection count due to sub MSGes, which can be combine to one big MSG, package index error
+-define(CONN_STAT_DISC_TIMEOUT,13). % Disconnection count due to VDR timeout
+-define(CONN_STAT_DISC_UNREG,  14). % Disconnection count due to VDR unregistry
+-define(CONN_STAT_DISC_MSGEX,  15). % Disconnection count due to MSG parsing exception
+-define(CONN_STAT_DISC_GW,     16). % Disconnection count due to a disconnection from gateway
+-define(CONN_STAT_SERVER_MSG,  17). % Count for MSGs from an unknown place instead of VDR
+-define(CONN_STAT_INVALID_MSG, 18). % Count for undefined-type MSGes
+-define(CONN_STAT_TO_GW,       19). % Count for MSGes to gateway
+-define(CONN_STAT_FROM_GW,     20). % Count for MSGes from gateway
+-define(CONN_STAT_INFO_COUNT,  21). % Count for connection status information, should be of the last one and for an indication of the length
+
 
 -define(SUP_WAIT_INTVL_MS, 5000).
 

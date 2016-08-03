@@ -44,22 +44,23 @@ start(StartType, StartArgs) ->
 %             others    -> doesn't use HttpGps server
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 startserver(StartType, StartArgs) ->
-    [UseRedis, UseHttpGps] = StartArgs,
+    [UseRedisFlag, UseHttpGpsFlag] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
     if
-        UseRedis == 1 ->
+        UseRedisFlag == 1 ->
             ets:insert(msgservertable, {useredis, 1});
         true ->
-            ets:insert(msgservertable, {useredis, 0});
+            ets:insert(msgservertable, {useredis, 0})
     end,
+    [{useredis, UseRedis}] = ets:lookup(msgservertable, useredis),
     if
-        UseHttpGps == 1 ->
+        UseHttpGpsFlag == 1 ->
             ets:insert(msgservertable, {usehttpgps, 1});
         true ->
             ets:insert(msgservertable, {usehttpgps, 0})
     end,
+    [{usehttpgps, UseHttpGps}] = ets:lookup(msgservertable, usehttpgps),
     ets:insert(msgservertable, {redispid, undefined}),
 	ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),
@@ -76,250 +77,102 @@ startserver(StartType, StartArgs) ->
     ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
     common:loginfo("Tables are initialized."),
     
-	case file:make_dir(DEF_LOG_PATH ++ "/log") of
+	case file:make_dir(?DEF_LOG_PATH ++ "/log") of
 		ok ->
-			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log"]);
+			common:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
 		{error, DirEx0} ->
-			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log", DirEx0])
+			common:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
 	end,
-	case file:make_dir(DEF_LOG_PATH ++ "/log/vdr") of
+	case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
 		ok ->
-			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log/vdr"]);
+			common:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
 		{error, DirEx1} ->
-			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/vdr", DirEx1])
+			common:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
 	end,
-	case file:make_dir(DEF_LOG_PATH ++ "/log/redis") of
+	case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
 		ok ->
-			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/log/redis"]);
-		{error, DirEx1} ->
-			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/log/redis", DirEx1])
-	end,
-	case file:make_dir(DEF_LOG_PATH ++ "/media") of
-		ok ->
-			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/media"]);
+			common:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
 		{error, DirEx2} ->
-			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/media", DirEx2])
+			common:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
 	end,
-	case file:make_dir(DEF_LOG_PATH ++ "/upgrade") of
+	case file:make_dir(?DEF_LOG_PATH ++ "/media") of
 		ok ->
-			common:loginfo("Successfully create directory ~p", [DEF_LOG_PATH ++ "/upgrade"]);
+			common:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
 		{error, DirEx3} ->
-			common:loginfo("Cannot create directory ~p : ~p", [DEF_LOG_PATH ++ "/upgrade", DirEx3])
+			common:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
+	end,
+	case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
+		ok ->
+			common:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
+		{error, DirEx4} ->
+			common:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
 	end,
     common:loginfo("Directories are initialized."),
     
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            common:loginfo("Dynamic Message Server starts.~nApplication PID : ~p~nSupervisor PID : ~p", [AppPid, SupPid]),
-            case receive_db_ws_init_msg(false, false, 0, Mode) of
+            common:loginfo("Dynamic Message Server starts.~nApplication PID : ~p~nSupervisor PID : ~p", [self(), SupPid]),
+            case receive_redis_init_msg(UseRedis, 0) of
                 ok ->
-                    mysql:utf8connect(conn, DB, undefined, DBUid, DBPwd, DBName, true),
-					if
-						Mode == 2 ->
-		                    LinkPid = spawn(fun() -> connection_info_process(0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0,
-																			 0) end),
-		                    WSPid = spawn(fun() -> wsock_client:wsock_client_process(0, 0) end),
-		                    DBPid = spawn(fun() -> mysql:mysql_process(0, 0, [<<"">>, <<"">>, []], 0, [<<"">>, <<"">>, []], 0, [], 0, [<<"">>, <<"">>, []], 0, LinkPid) end),
-		                    DBTablePid = spawn(fun() -> db_table_deamon() end),
-		                    CCPid = spawn(fun() -> code_convertor_process() end),
-		                    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
-		                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
-		                    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
-							DBOperationPid = spawn(fun() -> db_data_operation_process(DBPid) end),
-							MysqlActivePid = spawn(fun() -> mysql_active_process(DBPid) end),
-							VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
-							VDROnlinePid = spawn(fun() -> vdr_online_process([]) end),
-							%HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
-							%DBMaintainPid = spawn(fun() -> db_data_maintain_process(DBPid, DBOperationPid, Mode) end),
-		                    ets:insert(msgservertable, {dbpid, DBPid}),
-		                    ets:insert(msgservertable, {wspid, WSPid}),
-		                    ets:insert(msgservertable, {linkpid, LinkPid}),
-		                    ets:insert(msgservertable, {dbtablepid, DBTablePid}),
-		                    ets:insert(msgservertable, {ccpid, CCPid}),
-		                    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
-		                    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
-		                    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
-							ets:insert(msgservertable, {dboperationpid, DBOperationPid}),
-							ets:insert(msgservertable, {mysqlactivepid, MysqlActivePid}),
-							ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
-							ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
-							%ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-		                    %ets:insert(msgservertable, {dbmaintainpid, VdrTablePid}),
-		                    common:loginfo("WS client process PID is ~p", [WSPid]),
-		                    common:loginfo("DB client process PID is ~p", [DBPid]),
-		                    common:loginfo("DB table deamon process PID is ~p", [DBTablePid]),
-		                    common:loginfo("Code convertor process PID is ~p", [CCPid]),
-		                    common:loginfo("VDR table processor process PID is ~p", [VdrTablePid]),
-		                    common:loginfo("Driver table processor process PID is ~p", [DriverTablePid]),
-		                    common:loginfo("Last pos table processor process PID is ~p", [LastPosTablePid]),
-							common:loginfo("DB operation process PID is ~p", [DBOperationPid]),
-							common:loginfo("Mysql active process PID is ~p", [MysqlActivePid]),
-							common:loginfo("VDR Log process PID is ~p", [VDRLogPid]),
-							common:loginfo("VDR Online process PID is ~p", [VDROnlinePid]),
-							%common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
-							%common:loginfo("DB miantain process PID is ~p", [DBMaintainPid]),
-
-							%case HttpGps of
-							%	1 ->
-							%		HttpGpsPid ! init;
-							%	_ ->
-							%		ok
-							%end,
-							%HttpGpsPid ! {self(), normal, [116.283016, 39.959856]},
-							%HttpGpsPid ! {self(), abnormal, [116.283016, 39.959856]},
-		                    
-				            common:loginfo("DB coding setting"),
-							DBPid ! {AppPid, conn, <<"set names 'utf8'">>},
-				            receive
-				                {AppPid, _} ->
-									common:loginfo("DB coding setting returns"),
-									case init_vdrdbtable(AppPid, DBPid) of
-										{error, ErrorMsg} ->
-											{error, ErrorMsg};
+                    LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
+                    ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
+                    
+                    CCPid = spawn(fun() -> code_convertor_process() end),
+                    ets:insert(msgservertable, {ccpid, CCPid}),
+                    
+                    
+                    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
+                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
+                    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
+    				VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
+    				VDROnlinePid = spawn(fun() -> vdr_online_process([]) end),
+                    ets:insert(msgservertable, {dbtablepid, DBTablePid}),
+                    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
+                    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
+                    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
+    				ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
+    				ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
+    				
+					case init_vdrdbtable(AppPid, DBPid) of
+						{error, ErrorMsg} ->
+							{error, ErrorMsg};
+						ok ->
+							case init_lastpostable(AppPid, DBPid) of
+								{error, ErrorMsg} ->
+									{error, ErrorMsg};
+								ok ->
+									case init_alarmtable(AppPid, DBPid) of
+										{error, ErrorMsg1} ->
+											{error, ErrorMsg1};
 										ok ->
-											case init_lastpostable(AppPid, DBPid) of
-												{error, ErrorMsg} ->
-													{error, ErrorMsg};
+											case init_drivertable(AppPid, DBPid) of
+												{error, ErrorMsg2} ->
+													{error, ErrorMsg2};
 												ok ->
-													case init_alarmtable(AppPid, DBPid) of
-														{error, ErrorMsg1} ->
-															{error, ErrorMsg1};
-														ok ->
-															case init_drivertable(AppPid, DBPid) of
-																{error, ErrorMsg2} ->
-																	{error, ErrorMsg2};
-																ok ->
-												                    CCPid ! {AppPid, create},
-												                    receive
-												                        created ->
-												                            common:loginfo("Code convertor table is created"),
-																			HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
-																			ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-																			common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
-																			case HttpGps of
-																				1 ->
-																					HttpGpsPid ! init;
-																				_ ->
-																					ok
-																			end,
-												                            {ok, AppPid}
-												                        after ?TIMEOUT_CC_INIT_PROCESS ->
-												                            {error, "ERROR : code convertor table is timeout"}
-																	end
-															end
+								                    CCPid ! {AppPid, create},
+						"ERROR : init db coding is timeout"		                    receive
+								                        created ->
+								                            common:loginfo("Code convertor table is created"),
+															HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
+															ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
+															common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
+															case HttpGps of
+																1 ->
+																	HttpGpsPid ! init;
+																_ ->
+																	ok
+															end,
+								                            {ok, AppPid}
+								                        after ?TIMEOUT_CC_INIT_PROCESS ->
+								                            {error, "ERROR : code convertor table is timeout"}
 													end
 											end
 									end
-							after
-								?DB_RESP_TIMEOUT ->
-									{error, "ERROR : init db coding is timeout"}
-							end;
-						true ->
-		                    LinkPid = spawn(fun() -> connection_info_process(0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0, 
-																			 0, 0, 0, 0, 0,
-																			 0) end),
-		                    DBPid = spawn(fun() -> mysql:mysql_process(0, 0, [<<"">>, <<"">>, []], 0, [<<"">>, <<"">>, []], 0, [], 0, [<<"">>, <<"">>, []], 0, LinkPid) end),
-		                    DBTablePid = spawn(fun() -> db_table_deamon() end),
-		                    CCPid = spawn(fun() -> code_convertor_process() end),
-		                    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
-		                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
-		                    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
-							DBOperationPid = spawn(fun() -> db_data_operation_process(DBPid) end),
-							MysqlActivePid = spawn(fun() -> mysql_active_process(DBPid) end),
-							VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
-							VDROnlinePid = spawn(fun() -> vdr_online_process([]) end),
-							%HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
-							%DBMaintainPid = spawn(fun() -> db_data_maintain_process(DBPid, DBOperationPid, Mode) end),
-		                    ets:insert(msgservertable, {dbpid, DBPid}),
-		                    ets:insert(msgservertable, {linkpid, LinkPid}),
-		                    ets:insert(msgservertable, {dbtablepid, DBTablePid}),
-		                    ets:insert(msgservertable, {ccpid, CCPid}),
-		                    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
-		                    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
-		                    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
-							ets:insert(msgservertable, {dboperationpid, DBOperationPid}),
-							ets:insert(msgservertable, {mysqlactivepid, MysqlActivePid}),
-							ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
-							ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
-							%ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-							%ets:insert(msgservertable, {dbmaintainpid, DBMaintainPid}),
-		                    common:loginfo("DB client process PID is ~p", [DBPid]),
-		                    common:loginfo("DB table deamon process PID is ~p", [DBTablePid]),
-		                    common:loginfo("Code convertor process PID is ~p", [CCPid]),
-		                    common:loginfo("VDR table processor process PID is ~p", [VdrTablePid]),
-		                    common:loginfo("Driver table processor process PID is ~p", [DriverTablePid]),
-		                    common:loginfo("Last pos table processor process PID is ~p", [LastPosTablePid]),
-		                    common:loginfo("DB operation process PID is ~p", [DBOperationPid]),
-							common:loginfo("Mysql active process PID is ~p", [MysqlActivePid]),
-							common:loginfo("VDR Log process PID is ~p", [VDRLogPid]),
-							common:loginfo("VDR Online process PID is ~p", [VDROnlinePid]),
-							%common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
-		                    %common:loginfo("DB miantain process PID is ~p", [DBMaintainPid]),
-		                    
-							%case HttpGps of
-							%	1 ->
-							%		HttpGpsPid ! init;
-							%	_ ->
-							%		ok
-							%end,
-							
-							common:loginfo("DB coding setting"),
-				            DBPid ! {AppPid, conn, <<"set names 'utf8'">>},
-				            receive
-				                {AppPid, _} ->
-									common:loginfo("DB coding setting returns"),
-									case init_vdrdbtable(AppPid, DBPid) of
-										{error, ErrorMsg} ->
-											{error, ErrorMsg};
-										ok ->
-											case init_lastpostable(AppPid, DBPid) of
-												{error, ErrorMsg} ->
-													{error, ErrorMsg};
-												ok ->
-													case init_alarmtable(AppPid, DBPid) of
-														{error, ErrorMsg1} ->
-															{error, ErrorMsg1};
-														ok ->
-															case init_drivertable(AppPid, DBPid) of
-																{error, ErrorMsg2} ->
-																	{error, ErrorMsg2};
-																ok ->
-												                    CCPid ! {AppPid, create},
-												                    receive
-												                        created ->
-												                            common:loginfo("Code convertor table is created"),
-																			HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
-																			ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-																			common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
-																			case HttpGps of
-																				1 ->
-																					HttpGpsPid ! init;
-																				_ ->
-																					ok
-																			end,
-												                            {ok, AppPid}
-												                        after ?TIMEOUT_CC_INIT_PROCESS ->
-												                            {error, "ERROR : code convertor table is timeout"}
-																	end
-															end
-													end
-											end
-									end
-							after
-								?DB_RESP_TIMEOUT ->
-									{error, "ERROR : init db coding is timeout"}
 							end
-					end;
-                {error, ErrMsg} ->
-                    {error, ErrMsg}
+                    end;
+                {error, RedisError} ->
+                    {error, "Message server fails to start : " ++ RedisError}                  
             end;
         ignore ->
             common:loginfo("Message server fails to start : ignore"),
@@ -329,441 +182,38 @@ startserver(StartType, StartArgs) ->
             {error, Error}
     end.
 
-init_vdrdbtable(AppPid, DBPid) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%		Initialize VDR table from Redis.
+%		Should we also use local cache here even if we use Redis? 
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+init_vdr_db_table() ->
 	ets:delete_all_objects(vdrdbtable),
-	common:loginfo("Init device/vehicle db table count."),
-	DBPid ! {AppPid, conn, <<"select count(*) from device left join vehicle on vehicle.device_id = device.id">>},
-	receive
-		{AppPid, Count} ->
-			RealCount = extract_vdrdbtable_count(Count),
-			common:loginfo("Init device/vehicle db table count=~p", [RealCount]),
-			init_vdrdbtable_once(AppPid, DBPid, 0, RealCount),
-			common:loginfo("Init device/vehicle db table final count=~p", [ets:info(vdrdbtable,size)])
-	after ?DB_RESP_TIMEOUT ->
-		{error, "ERROR : init device/vehicle db table count is timeout"}
-	end.
+	common:loginfo("Init vdr db table.").
 
-extract_vdrdbtable_count(Result) ->
-	try
-		%{data,{mysql_result,[{<<>>,<<"count(*)">>,21,'LONGLONG'}],[[24067]],0,0,[],0,[]}} = Result,
-		common:loginfo("extract_vdrdbtable_count(Result) : ~p", [Result]),
-		{_,{_,[{_,_,_,_}],[[Count]],_,_,_,_,_}} = Result,
-		Count
-	catch
-		Ex:Msg ->
-			common:loginfo("Cannot extract device/vehicle db table count.\n(Exception)~p:(Message)~p~n", [Ex, Msg]),
-			0
-	end.	
-
-init_vdrdbtable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-													   Count > 0,
-													   is_integer(Index),
-													   Index >= 0,
-													   Index < Count,
-													   Index + ?DB_HASH_UPDATE_ONCE_COUNT =< Count ->
-	common:loginfo("Init device/vehicle db table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from device left join vehicle on vehicle.device_id = device.id order by reg_time desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Index + ?DB_HASH_UPDATE_ONCE_COUNT)])},
-	receive
-		{AppPid, Result} ->
-			init_vdrdbtable_once(Result),
-			init_vdrdbtable_once(AppPid, DBPid, Index+?DB_HASH_UPDATE_ONCE_COUNT, Count)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init device/vehicle db table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_vdrdbtable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-													   Count > 0,
-													   is_integer(Index),
-													   Index >= 0,
-													   Index < Count,
-													   Index+?DB_HASH_UPDATE_ONCE_COUNT > Count ->
-	common:loginfo("Init device/vehicle db table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from device left join vehicle on vehicle.device_id = device.id order by reg_time desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Count-Index)])},
-	receive
-		{AppPid, Result} ->
-			init_vdrdbtable_once(Result)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init device/vehicle db table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_vdrdbtable_once(_AppPid, _DBPid, _Count, _Index) ->
-	ok.
-
-init_vdrdbtable_once(Result) ->
-	case vdr_handler:extract_db_resp(Result) of
-		error ->
-			common:loginfo("Message server cannot init vdr db table");
-		{ok, empty} ->
-		    common:loginfo("Message server init empty vdr db table");
-		{ok, Records} ->
-			try
-				do_init_vdrdbtable_once(Records)
-			catch
-				_:Msg ->
-					common:loginfo("Message server fails to init vdr db table : ~p", [Msg])
-			end
-	end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% DriverID will always be undefined
+% Description :
+%		Initialize driver table from Redis.
+%		Should we also use local cache here even if we use Redis? 
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_init_vdrdbtable_once(Result) when is_list(Result),
-								length(Result) > 0 ->
-	[H|T] = Result,
-	{VDRID, VDRSerialNo, VDRAuthenCode, VehicleCode, VehicleID, DriverID} = vdr_handler:get_record_column_info(H),
-	if
-		VehicleCode =/= undefined andalso binary_part(VehicleCode, 0, 1) =/= <<"?">> ->
-			VDRDBItem = #vdrdbitem{authencode=VDRAuthenCode, 
-								   vdrid=VDRID, 
-								   vdrserialno=VDRSerialNo,
-								   vehiclecode=VehicleCode,
-								   vehicleid=VehicleID,
-								   driverid=DriverID},
-			ets:insert(vdrdbtable, VDRDBItem),
-			do_init_vdrdbtable_once(T);
-		true ->
-			common:loginfo("Failt to insert Device/Vehicle : VDRAuthenCode ~p, VDRID ~p, VDRSerialNo ~p, VehicleCode ~p, VehicleID ~p, DriverID ~p",
-							[VDRAuthenCode, VDRID, VDRSerialNo, VehicleCode, VehicleID, DriverID]),
-			do_init_vdrdbtable_once(T)
-	end;
-do_init_vdrdbtable_once(_Result) ->
-	ok.
-
-init_drivertable(AppPid, DBPid) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+init_driver_table() ->
 	ets:delete_all_objects(drivertable),
-	common:loginfo("Init driver table count."),
-	DBPid ! {AppPid, conn, <<"select count(*) from driver">>},
-	receive
-		{AppPid, Count} ->
-			RealCount = extract_drivertable_count(Count),
-			common:loginfo("Init driver table count=~p", [RealCount]),
-			init_drivertable_once(AppPid, DBPid, 0, RealCount),
-			common:loginfo("Init driver table final count=~p", [ets:info(drivertable,size)])
-	after ?DB_RESP_TIMEOUT ->
-		{error, "ERROR : init driver table count is timeout"}
-	end.
+	common:loginfo("Init driver table.").
 
-extract_drivertable_count(Result) ->
-	try
-		%{data,{mysql_result,[{<<>>,<<"count(*)">>,21,'LONGLONG'}],[[15018]],0,0,[],0,[]}} = Result,
-		common:loginfo("extract_drivertable_count(Result) : ~p", [Result]),
-		{_,{_,[{_,_,_,_}],[[Count]],_,_,_,_,_}} = Result,
-		Count
-	catch
-		Ex:Msg ->
-			common:loginfo("Cannot extract driver table count.\n(Exception)~p:(Message)~p~n", [Ex, Msg]),
-			0
-	end.	
-
-init_drivertable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-														Count > 0,
-														is_integer(Index),
-														Index >= 0,
-														Index < Count,
-														Index + ?DB_HASH_UPDATE_ONCE_COUNT =< Count ->
-	common:loginfo("Init driver table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from driver order by id desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Index + ?DB_HASH_UPDATE_ONCE_COUNT)])},
-	receive
-		{AppPid, Result} ->
-			init_drivertable_once(Result),
-			init_drivertable_once(AppPid, DBPid, Index+?DB_HASH_UPDATE_ONCE_COUNT, Count)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init driver table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_drivertable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-														Count > 0,
-														is_integer(Index),
-														Index >= 0,
-														Index < Count,
-														Index+?DB_HASH_UPDATE_ONCE_COUNT > Count ->
-	common:loginfo("Init driver table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from driver order by id desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Count-Index)])},
-	receive
-		{AppPid, Result} ->
-			init_drivertable_once(Result)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init driver table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_drivertable_once(_AppPid, _DBPid, _Count, _Index) ->
-	ok.
-
-init_drivertable_once(DriverResult) ->
-	case vdr_handler:extract_db_resp(DriverResult) of
-		error ->
-			common:loginfo("Message server cannot init driver table");
-		{ok, empty} ->
-		    common:loginfo("Message server init empty driver table");
-		{ok, Records} ->
-			try
-				do_init_drivertable(Records)
-			catch
-				_:Msg ->
-					common:loginfo("Message server fails to init driver table : ~p", [Msg])
-			end
-	end.
-
-do_init_drivertable(DriverResult) when is_list(DriverResult),
-									   length(DriverResult) > 0 ->
-	[H|T] = DriverResult,
-	{<<"driver">>, <<"id">>, ID} = vdr_handler:get_record_field(<<"driver">>, H, <<"id">>),
-	{<<"driver">>, <<"license_no">>, LicNo} = vdr_handler:get_record_field(<<"driver">>, H, <<"license_no">>),
-	{<<"driver">>, <<"certificate_code">>, CertCode} = vdr_handler:get_record_field(<<"driver">>, H, <<"certificate_code">>),
-	DriverItem = #driverinfo{driverid=ID, 
-							 licno=LicNo, 
-							 certcode=CertCode},
-	%common:loginfo("Driver : ~p", [DriverItem]),
-	ets:insert(drivertable, DriverItem),
-	do_init_drivertable(T);
-do_init_drivertable(_DriverResult) ->
-	ok.
-
-init_lastpostable(AppPid, DBPid) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%		Initialize last position table from Redis.
+%		Should we also use local cache here even if we use Redis? 
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+init_last_pos_table() ->
 	ets:delete_all_objects(lastpostable),
-	common:loginfo("Init last pos table count."),
-	DBPid ! {AppPid, conn, <<"select count(*) from vehicle_position_last">>},
-	receive
-		{AppPid, Count} ->
-			RealCount = extract_lastpostable_count(Count),
-			common:loginfo("Init last pos table count=~p", [RealCount]),
-			init_lastpostable_once(AppPid, DBPid, 0, RealCount),
-			common:loginfo("Init last pos table final count=~p", [ets:info(lastpostable,size)])
-	after ?DB_RESP_TIMEOUT ->
-		{error, "ERROR : init last pos table count is timeout"}
-	end.
-
-extract_lastpostable_count(Result) ->
-	try
-		%{data,{mysql_result,[{<<>>,<<"count(*)">>,21,'LONGLONG'}],[[15018]],0,0,[],0,[]}} = Result,
-		common:loginfo("extract_lastpostable_count(Result) : ~p", [Result]),
-		{_,{_,[{_,_,_,_}],[[Count]],_,_,_,_,_}} = Result,
-		Count
-	catch
-		Ex:Msg ->
-			common:loginfo("Cannot extract last pos table count.\n(Exception)~p:(Message)~p~n", [Ex, Msg]),
-			0
-	end.	
-
-init_lastpostable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-														Count > 0,
-														is_integer(Index),
-														Index >= 0,
-														Index < Count,
-														Index + ?DB_HASH_UPDATE_ONCE_COUNT =< Count ->
-	common:loginfo("Init last pos table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from vehicle_position_last order by vehicle_id desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Index + ?DB_HASH_UPDATE_ONCE_COUNT)])},
-	receive
-		{AppPid, Result} ->
-			init_lastpostable_once(Result),
-			init_lastpostable_once(AppPid, DBPid, Index+?DB_HASH_UPDATE_ONCE_COUNT, Count)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init last pos table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_lastpostable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-														Count > 0,
-														is_integer(Index),
-														Index >= 0,
-														Index < Count,
-														Index+?DB_HASH_UPDATE_ONCE_COUNT > Count ->
-	common:loginfo("Init driver table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from vehicle_position_last order by vehicle_id desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Count-Index)])},
-	receive
-		{AppPid, Result} ->
-			init_lastpostable_once(Result)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init last pos table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_lastpostable_once(_AppPid, _DBPid, _Count, _Index) ->
-	ok.
-
-init_lastpostable_once(DriverResult) ->
-	case vdr_handler:extract_db_resp(DriverResult) of
-		error ->
-			common:loginfo("Message server cannot init last pos table");
-		{ok, empty} ->
-		    common:loginfo("Message server init empty last pos table");
-		{ok, Records} ->
-			try
-				do_init_lastpostable(Records)
-			catch
-				_:Msg ->
-					common:loginfo("Message server fails to init last pos table : ~p", [Msg])
-			end
-	end.
-
-do_init_lastpostable(DriverResult) when is_list(DriverResult),
-									   length(DriverResult) > 0 ->
-	[H|T] = DriverResult,
-	{<<"vehicle_position_last">>, <<"vehicle_id">>, ID} = vdr_handler:get_record_field(<<"vehicle_position_last">>, H, <<"vehicle_id">>),
-	{<<"vehicle_position_last">>, <<"longitude">>, Lon} = vdr_handler:get_record_field(<<"vehicle_position_last">>, H, <<"longitude">>),
-	{<<"vehicle_position_last">>, <<"latitude">>, Lat} = vdr_handler:get_record_field(<<"vehicle_position_last">>, H, <<"latitude">>),
-	LastPosItem = #lastposinfo{vehicleid=ID, 
-							 longitude=Lon*1000000.0, 
-							 latitude=Lat*1000000.0},
-	%common:loginfo("Driver : ~p", [DriverItem]),
-	ets:insert(lastpostable, LastPosItem),
-	do_init_lastpostable(T);
-do_init_lastpostable(_DriverResult) ->
-	ok.
-
-init_alarmtable(AppPid, DBPid) ->
-	ok.
-
-init_alarmtable_dummy(AppPid, DBPid) ->
-	ets:delete_all_objects(alarmtable),
-	common:loginfo("Init alarm table count."),
-	DBPid ! {AppPid, conn, <<"select count(*) from vehicle_alarm where isnull(clear_time)">>},
-	receive
-		{AppPid, Count} ->
-			RealCount = extract_alarmtable_count(Count),
-			common:loginfo("Init alarm table count=~p", [RealCount]),
-			init_alarmtable_once(AppPid, DBPid, 0, RealCount),
-			common:loginfo("Init alarm table final count=~p", [ets:info(alarmtable,size)])
-	after ?DB_RESP_TIMEOUT ->
-		{error, "ERROR : init alarm table count is timeout"}
-	end.
-
-extract_alarmtable_count(Result) ->
-	try
-		%{data,{mysql_result,[{<<>>,<<"count(*)">>,21,'LONGLONG'}],[[15018]],0,0,[],0,[]}} = Result,
-		common:loginfo("extract_alarmtable_count(Result) : ~p", [Result]),
-		{_,{_,[{_,_,_,_}],[[Count]],_,_,_,_,_}} = Result,
-		Count
-	catch
-		Ex:Msg ->
-			common:loginfo("Cannot extract alarm table count.\n(Exception)~p:(Message)~p~n", [Ex, Msg]),
-			0
-	end.	
-
-init_alarmtable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-													   Count > 0,
-													   is_integer(Index),
-													   Index >= 0,
-													   Index < Count,
-													   Index + ?DB_HASH_UPDATE_ONCE_COUNT =< Count ->
-	common:loginfo("Init alarm table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from vehicle_alarm where isnull(clear_time) order by alarm_time desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Index + ?DB_HASH_UPDATE_ONCE_COUNT)])},
-	receive
-		{AppPid, Result} ->
-			init_alarmtable_once(Result),
-			init_alarmtable_once(AppPid, DBPid, Index+?DB_HASH_UPDATE_ONCE_COUNT, Count)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init alarm table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_alarmtable_once(AppPid, DBPid, Index, Count) when is_integer(Count),
-													   Count > 0,
-													   is_integer(Index),
-													   Index >= 0,
-													   Index < Count,
-													   Index+?DB_HASH_UPDATE_ONCE_COUNT > Count ->
-	common:loginfo("Init alarm table index=~p", [Index]),
-	DBPid ! {AppPid, conn, binary:list_to_bin([<<"select * from vehicle_alarm where isnull(clear_time) order by alarm_time desc limit ">>, 
-											   integer_to_binary(Index), <<", ">>, integer_to_binary(Count-Index)])},
-	receive
-		{AppPid, Result} ->
-			init_alarmtable_once(Result)
-	after ?DB_RESP_TIMEOUT ->
-		{error, lists:append(["ERROR : init alarm table is timeout when index=", integer_to_list(Index), " and count=", integer_to_list(Count), "."])}
-	end;
-init_alarmtable_once(_AppPid, _DBPid, _Count, _Index) ->
-	ok.
-
-init_alarmtable_once(AlarmResult) ->
-	case vdr_handler:extract_db_resp(AlarmResult) of
-		error ->
-			common:loginfo("Message server cannot init alarm table");
-		{ok, empty} ->
-		    common:loginfo("Message server init empty alarm table");
-		{ok, Records} ->
-			try
-				do_init_alarmtable(Records)
-			catch
-				_:Msg ->
-					common:loginfo("Message server fails to init alarm table : ~p", [Msg])
-			end
-	end.
-
-do_init_alarmtable(AlarmResult) when is_list(AlarmResult),
-									 length(AlarmResult) > 0 ->
-	[H|T] = AlarmResult,
-	{<<"vehicle_alarm">>, <<"vehicle_id">>, VehicleID} = vdr_handler:get_record_field(<<"vehicle_alarm">>, H, <<"vehicle_id">>),
-	{<<"vehicle_alarm">>, <<"type_id">>, TypeID} = vdr_handler:get_record_field(<<"vehicle_alarm">>, H, <<"type_id">>),
-	{<<"vehicle_alarm">>, <<"alarm_time">>, {datetime, AlarmTime}} = vdr_handler:get_record_field(<<"vehicle_alarm">>, H, <<"alarm_time">>),
-	%{<<"vehicle_alarm">>, <<"sn">>, SN} = vdr_handler:get_record_field(<<"vehicle_alarm">>, H, <<"sn">>),
-	%  AlarmTime is {{YY,MM,DD},{Hh,Mm,Ss}}
-	if
-		VehicleID =/= undefined andalso TypeID =/= undefined andalso AlarmTime =/= undefined ->
-			AlarmItem = #alarmitem{vehicleid=VehicleID, 
-								   type=TypeID, 
-								   time=AlarmTime}, 
-								   %sn=SN},
-			ets:insert(alarmtable, AlarmItem),
-			do_init_alarmtable(T);
-		true ->
-			common:loginfo("Failt to insert alarm : VehicleID ~p, TypeID ~p, ClearTime ~p",
-							[VehicleID, TypeID, AlarmTime]),
-			do_init_alarmtable(T)
-	end;
-do_init_alarmtable(_AlarmResult) ->
-	ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% This process will update device\vehicle table and alarm table every half an hour
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%db_data_maintain_process(DBPid, DBOperationPid, Mode) ->
-%	ok.
-%
-%db_data_maintain_process_dummy(DBPid, DBOperationPid, Mode) ->
-%	receive
-%		stop ->
-%			common:loginfo("DB maintain process receive unknown msg.");
-%		_ ->
-%			db_data_maintain_process(DBPid, DBOperationPid, Mode)
-%	after ?DB_HASH_UPDATE_INTERVAL ->
-%			if
-%				Mode == 2 orelse Mode == 1 ->
-%					common:loginfo("DB maintain process is active."),
-%					Pid = self(),
-%					DBPid ! {Pid, conn, <<"set names 'utf8'">>},
-%					receive
-%						{Pid, _} ->
-%							ok
-%					end,
-%					DBOperationPid ! {Pid, update, devicevehicle},
-%					receive
-%						{Pid, updateok} ->
-%							ok
-%					end,
-%					DBOperationPid ! {Pid, update, alarm},
-%					receive
-%						{Pid, updateok} ->
-%							ok
-%					end,
-%					db_data_maintain_process(DBPid, DBOperationPid, Mode);
-%				true ->
-%					common:loginfo("DB maintain process is active without DB operation."),
-%					db_data_maintain_process(DBPid, DBOperationPid, Mode)
-%			end
-%	end.			
-
-mysql_active_process(DBPid) ->
-	receive
-		stop ->
-			common:loginfo("Mysql active process stops.");
-		_ ->
-			mysql_active_process(DBPid)
-	after ?MAX_DB_PROC_WAIT_INTERVAL ->
-			DBPid ! {self(), active},
-			mysql_active_process(DBPid)
-	end.
+	common:loginfo("Init last position table.").
 
 vdr_log_process(VDRList) ->
 	receive
@@ -1247,7 +697,7 @@ code_convertor_process() ->
     receive
         {Pid, create} ->
             code_convertor:init_code_table(),
-            %common:loginfo("CC process ~p : code table is initialized", [self()]),
+            common:loginfo("Code table is initialized."),
             Pid ! created,
             code_convertor_process();
         {Pid, gbktoutf8, Src} ->
@@ -1307,290 +757,64 @@ code_convertor_process() ->
 		_UnknownMsg ->
 			%common:loginfo("CC process ~p : unknown message : ~p", [self(), UnknownMsg]),
 			code_convertor_process()
-	%after ?CC_PID_TIMEOUT ->
-	%		common:loginfo("CC process ~p : current waiting timeout and start another waiting", [self()]),
-	%		code_convertor_process()
     end.
-            
-connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-						LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-						UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-						ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-						VDRMsgGot, VDRMsgSent) ->
-	receive
-		stop ->
-			ok;
-		{_Pid, test} ->
-			connection_info_process(Conn+1, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, conn} ->
-			connection_info_process(Conn+1, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, chardisc} ->
-			connection_info_process(Conn, CharDisc+1, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, regdisc} ->
-			connection_info_process(Conn, CharDisc, RegDisc+1, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, authdisc} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc+1, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, errdisc} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc+1, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, clientdisc} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc+1, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, lenerr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr+1, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, parerr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr+1, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, spliterr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr+1, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, resterr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr+1, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, packerr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr+1, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, vdrtimeout} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr+1,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, unauthdisc} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc+1, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, exitdisc} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc+1, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, vdrerr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr+1, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, unvdrerr} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr+1, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, msgex} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx+1, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, gwstop} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop+1,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, servermsg} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg+1, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, invalidmsgerror} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg+1, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, dbmsgstored, N} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored+N, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, dbmsgsent, N} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent+N, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, dbmsgunknown} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown+1, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, dbmsgerror} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError+1, 
-									VDRMsgGot, VDRMsgSent);
-		{_Pid, vdrmsggot} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot+1, VDRMsgSent);
-		{_Pid, vdrmsgsent} ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent+1);
-		{_Pid, clear} ->
-			connection_info_process(0, 0, 0, 0, 0, 
-									0, 0, 0, 0, 0, 
-									0, 0, 0, 0, 0, 
-									0, 0, 0, 0, 0, 
-									0, 0, 0, 0, 0,
-									0);
-		{Pid, count} ->
-			Pid ! {Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-				   LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-				   UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-				   ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-				   VDRMsgGot, VDRMsgSent},
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent);
-		_ ->
-			connection_info_process(Conn, CharDisc, RegDisc, AuthDisc, ErrDisc, ClientDisc, 
-									LenErr, ParErr, SplitErr, RestErr, PackErr, TimeoutErr,
-									UnauthDisc, ExitDisc, VdrErr, UnvdrErr, MsgEx, GWStop,
-									ServerMsg, InvalidMsg, DBMsgStored, DBMsgSent, DBMsgUnknown, DBMsgError, 
-									VDRMsgGot, VDRMsgSent)
-	end.
 
-%%%
-%%% Will wait 20s
-%%%
-receive_db_ws_init_msg(WSOK, DBOK, Count, Mode) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%		Maintain the connection status information
+%       Please refer to include\header.hrl for details
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+connection_info_process(List) ->
+    Len = length(List),
     if
-        Count >= 20 ->
-			if
-				Mode == 2 ->
-		            if
-		                WSOK == false andalso DBOK == false ->
-		                    {error, "DB and WS both are not ready"};
-		                WSOK == true andalso DBOK == false ->
-		                    {error, "DB is not ready"};
-		                WSOK == false andalso DBOK == true ->
-		                    {error, "WS is not ready"};
-		                WSOK == true andalso DBOK == true ->
-							common:loginfo("DB is ok and WS is ok."),
-		                    ok;
-		                true ->
-		                    {error, "Unknown DB and WS states"}
-		            end;
-				Mode == 1 ->
-		            if
-		                DBOK == true ->
-							common:loginfo("DB is ok."),
-		                    ok;
-		                DBOK == false ->
-		                    {error, "DB is not ready"};
-		                true ->
-		                    {error, "Unknown DB and WS states"}
-		            end;
-				true ->
-                    ok
-			end;
+        Len == ?CONN_STAT_INFO_COUNT ->
+        	receive
+        		stop ->
+        			ok;
+                clear ->
+                    connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0));
+                {clear, ClearIndex} ->
+                    connection_info_process(lists:sublist(List, ClearIndex - 1) ++ [0] ++ lists:nthtail(ClearIndex + 1, List));
+                {Pid, count} ->
+                    Pid ! List;
+                {record, Index} ->
+                    connection_info_process(lists:sublist(List, Index - 1) ++ [lists:nth(Index, List) + 1] ++ lists:nthtail(Index + 1, List));
+        		_ ->
+        			connection_info_process(List)
+        	end;
         true ->
-			if
-				Mode == 2 ->
-					if
-		                WSOK == true andalso DBOK == true ->
-		                    ok;
-						true ->
-				            receive
-				                {_DBPid, dbok} ->
-				                    if
-				                        WSOK == true ->
-											common:loginfo("DB is ok after WS is ok."),
-				                            ok;
-				                        true ->
-				                            receive_db_ws_init_msg(WSOK, true, Count+1, Mode)
-				                    end;
-				                {_WSPid, wsok} ->
-				                    if
-				                        DBOK == true ->
-											common:loginfo("WS is ok after DB is ok."),
-				                            ok;
-				                        true ->
-				                            receive_db_ws_init_msg(true, DBOK, Count+1, Mode)
-				                    end;
-				                _ ->
-				                    receive_db_ws_init_msg(WSOK, DBOK, Count+1, Mode)
-				            after ?WAIT_LOOP_INTERVAL ->
-				                    receive_db_ws_init_msg(WSOK, DBOK, Count+1, Mode)
-				            end
-					end;
-				Mode == 1 ->
-					if
-		                DBOK == true ->
-		                    ok;
-						true ->
-				            receive
-				                {_DBPid, dbok} ->
-									common:loginfo("DB is ok."),
-									ok;
-				                _ ->
-				                    receive_db_ws_init_msg(WSOK, DBOK, Count+1, Mode)
-				            after ?WAIT_LOOP_INTERVAL ->
-				                    receive_db_ws_init_msg(WSOK, DBOK, Count+1, Mode)
-				            end
-					end;
-				true ->
-                    ok
-			end
-    end.                
+            connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0))
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%       Will wait 20s for establishing the Redis connection
+% Parameter :
+%       UseRedis    : 1 -> use Redis
+%                     0 -> not use Redis
+%       Count       : 
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+receive_redis_init_msg(UseRedis, Count) ->
+    if
+        UseRedis == 1 ->
+            if
+                Count > 20 ->
+                    {error, "Redis is not ready"};
+                true ->
+                    receive
+                        {"Redis", redisok} ->
+        					ok
+                    after ?WAIT_LOOP_INTERVAL ->
+                            receive_redis_init_msg(UseRedis, Count+1)
+                    end
+            end;
+        true ->
+            ok
+    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
