@@ -112,61 +112,58 @@ startserver(StartType, StartArgs) ->
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            common:loginfo("Dynamic Message Server starts.~nApplication PID : ~p~nSupervisor PID : ~p", [self(), SupPid]),
+            common:loginfo("Dynamic Message Server starts initializing data structures."),
             case receive_redis_init_msg(UseRedis, 0) of
                 ok ->
                     LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
                     ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
                     
-                    CCPid = spawn(fun() -> code_convertor_process() end),
+                    CCPid = spawn(fun() -> code_convertor_process(0) end),
                     ets:insert(msgservertable, {ccpid, CCPid}),
-                    
-                    
+                                        
                     VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
-                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
-                    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
-    				VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
-    				VDROnlinePid = spawn(fun() -> vdr_online_process([]) end),
-                    ets:insert(msgservertable, {dbtablepid, DBTablePid}),
                     ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
+					
+                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
                     ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
+
+					LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
                     ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
+
+					VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
     				ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
+
+					VDROnlinePid = spawn(fun() -> vdr_online_process([]) end),
     				ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
     				
-					case init_vdrdbtable(AppPid, DBPid) of
-						{error, ErrorMsg} ->
-							{error, ErrorMsg};
+					case init_vdr_db_table() of
+						{error, Msg0} ->
+							{error, Msg0};
 						ok ->
-							case init_lastpostable(AppPid, DBPid) of
-								{error, ErrorMsg} ->
-									{error, ErrorMsg};
+							case init_last_pos_table() of
+								{error, Msg1} ->
+									{error, Msg1};
 								ok ->
-									case init_alarmtable(AppPid, DBPid) of
-										{error, ErrorMsg1} ->
-											{error, ErrorMsg1};
+									case init_driver_table() of
+										{error, Msg2} ->
+											{error, Msg2};
 										ok ->
-											case init_drivertable(AppPid, DBPid) of
-												{error, ErrorMsg2} ->
-													{error, ErrorMsg2};
-												ok ->
-								                    CCPid ! {AppPid, create},
-						"ERROR : init db coding is timeout"		                    receive
-								                        created ->
-								                            common:loginfo("Code convertor table is created"),
-															HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
-															ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-															common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
-															case HttpGps of
-																1 ->
-																	HttpGpsPid ! init;
-																_ ->
-																	ok
-															end,
-								                            {ok, AppPid}
-								                        after ?TIMEOUT_CC_INIT_PROCESS ->
-								                            {error, "ERROR : code convertor table is timeout"}
-													end
+						                    CCPid ! {self(), create},
+											receive
+						                        created ->
+						                            common:loginfo("Code convertor table is created"),
+													HttpGpsPid = spawn(fun() -> http_gps_deamon(HttpGpsServer, uninit, 0, 0, 0, 0) end),
+													ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
+													common:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
+													case HttpGps of
+														1 ->
+															HttpGpsPid ! init;
+														_ ->
+															ok
+													end,
+						                            {ok, AppPid}
+						                        after ?TIMEOUT_CC_INIT_PROCESS ->
+						                            {error, "ERROR : code convertor table is timeout"}
 											end
 									end
 							end
@@ -387,6 +384,15 @@ db_data_operation_process(DBPid) ->
 			db_data_operation_process(DBPid)
 	end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameters:
+%   redis   : 1         -> use Redis
+%             others    -> doesn't use Redis, for the capacity test
+%   HttpGps : 1         -> use HttpGps server
+%             others    -> doesn't use HttpGps server
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 vdrtable_insert_delete_process() ->
 	receive
 		stop ->
@@ -693,70 +699,76 @@ stop(_State) ->
     end,
     error_logger:info_msg("Message server stops.").
 
-code_convertor_process() ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%		Convert characters between UTF8 and GBK
+% Parameters :
+%   AppPid  :
+%   DispLog : 1         -> display log message
+%             others    -> doesn't display log message
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+code_convertor_process(DispLog) ->
     receive
-        {Pid, create} ->
+        {Pid, create} ->			
             code_convertor:init_code_table(),
             common:loginfo("Code table is initialized."),
             Pid ! created,
-            code_convertor_process();
-        {Pid, gbktoutf8, Src} ->
-            try
-                %common:loginfo("CC process ~p : source GBK from ~p : ~p", [self(), Pid, Src]),
-                Value = code_convertor:to_utf8(Src),
-                %common:loginfo("CC process ~p : dest UTF8 : ~p", [self(), Value]),
-                Pid ! Value
-            catch
-                _:_ ->
-                    common:loginfo("CC process ~p : EXCEPTION when converting GBK to UTF8 : ~p", [self(), Src]),
-                    Pid ! Src
-            end,
-            code_convertor_process();
-        {Pid, gbk2utf8, Src} ->
-            try
-                %common:loginfo("CC process ~p : source GBK from ~p : ~p", [self(), Pid, Src]),
-                Value = code_convertor:to_utf8(Src),
-                %common:loginfo("CC process ~p : dest UTF8 : ~p", [self(), Value]),
-                Pid ! Value
-            catch
-                _:_ ->
-                    common:loginfo("CC process ~p : EXCEPTION when converting GBK to UTF8 : ~p", [self(), Src]),
-                    Pid ! Src
-            end,
-            code_convertor_process();
-        {Pid, utf82gbk, Src} ->
-            try
-                %common:loginfo("CC process ~p : source UTF8 from ~p : ~p", [self(), Pid, Src]),
-                Value = code_convertor:to_gbk(Src),
-                %common:loginfo("CC process ~p : dest GBK : ~p", [self(), Value]),
-                Pid ! Value
-            catch
-                _:_ ->
-                    common:loginfo("CC process ~p : EXCEPTION when converting UTF8 to GBK : ~p", [self(), Src]),
-                    Pid ! Src
-            end,
-            code_convertor_process();
-        {Pid, utf8togbk, Src} ->
-            try
-                %common:loginfo("CC process ~p : source UTF8 from ~p : ~p", [self(), Pid, Src]),
-                Value = code_convertor:to_gbk(Src),
-                %common:loginfo("CC process ~p : dest GBK : ~p", [self(), Value]),
-                Pid ! Value
-            catch
-                _:_ ->
-                    common:loginfo("CC process ~p : EXCEPTION when converting UTF8 to GBK : ~p", [self(), Src]),
-                    Pid ! Src
-            end,
-            code_convertor_process();
+            code_convertor_process(DispLog);
         stop ->
             ok;
+        displaylog ->
+            code_convertor_process(1);
+        hidelog ->
+            code_convertor_process(0);
+        {Pid, gbk2utf8, Source} ->
+            try
+                Destination = code_convertor:to_utf8(Source),
+				if
+					DispLog == 1 ->
+						common:loginfo("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination])
+				end,
+                Pid ! Destination
+            catch
+                _:Reason ->
+					if
+						DispLog == 1 ->
+							common:loginfo("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason])
+					end,
+                    Pid ! Source
+            end,
+            code_convertor_process(DispLog);
+        {Pid, utf82gbk, Source} ->
+            try
+                Destination = code_convertor:to_gbk(Source),
+				if
+					DispLog == 1 ->
+						common:loginfo("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination])
+				end,
+                Pid ! Destination
+            catch
+                _:Reason ->
+					if
+						DispLog == 1 ->
+							common:loginfo("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason])
+					end,
+                    Pid ! Source
+            end,
+            code_convertor_process(DispLog);
 		{Pid, Msg} ->
-			%common:loginfo("CC process ~p : unknown message from ~p : ~p", [self(), Pid, Msg]),
+			if
+				DispLog == 1 ->
+					common:loginfo("code_convertor_process : unknown request : ~p", [Msg])
+			end,
 			Pid ! Msg,
-			code_convertor_process();
-		_UnknownMsg ->
-			%common:loginfo("CC process ~p : unknown message : ~p", [self(), UnknownMsg]),
-			code_convertor_process()
+			code_convertor_process(DispLog);
+		_ ->
+			if
+				DispLog == 1 ->
+					common:loginfo("code_convertor_process : unknown message")
+			end,
+			code_convertor_process(DispLog)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1140,7 +1152,9 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_full_address(Body) ->
-	%Pid = self(),
+	get_full_address(Body, 0).
+
+get_full_address(Body, DispLog) ->
 	%common:loginfo("Body : ~p", [Body]),
 	Province = get_province_name(Body),
 	%common:loginfo("Province : ~p", [Province]),

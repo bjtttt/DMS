@@ -12,22 +12,39 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loginfo(Data) when is_binary(Data) ->
+loginfo(Data, DispLog) when is_binary(Data),
+							is_integer(DispLog) ->
     try
-		error_logger:info_msg(binary_to_list(Data))
+		if
+			DispLog == 1 ->
+				error_logger:info_msg(binary_to_list(Data))
+		end
     catch
         Oper:Msg ->
-            error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
+			if
+				DispLog == 1 ->
+					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
+			end
     end
-loginfo(Data) when is_list(Data) ->
+loginfo(Data, DispLog) when is_list(Data),
+							is_integer(DispLog)->
     try
-		error_logger:info_msg(Data)
+		if
+			DispLog == 1 ->
+				error_logger:info_msg(Data)
+		end
     catch
         Oper:Msg ->
-            error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
+			if
+				DispLog == 1 ->
+					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
+			end
     end;
-loginfo(_Data) ->
-    error_logger:error_msg("loginfo fails : no binary or list").
+loginfo(_Data, DispLog) ->
+	if
+		DispLog == 1 ->
+			error_logger:error_msg("loginfo fails : no binary or list")
+	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
