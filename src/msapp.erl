@@ -29,7 +29,7 @@
 start(_StartType, StartArgs) ->
     Len = length(StartArgs),
     if
-        Len == 2 ->
+        Len =:= 2 ->
             startserver(StartArgs);
         true ->
             log:loginfo("Parameter count error : ~p", [Len])
@@ -48,14 +48,14 @@ startserver(StartArgs) ->
     [UseRedisFlag, UseHttpGpsFlag] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
     if
-        UseRedisFlag == 1 ->
+        UseRedisFlag =:= 1 ->
             ets:insert(msgservertable, {useredis, 1});
         true ->
             ets:insert(msgservertable, {useredis, 0})
     end,
     [{useredis, UseRedis}] = ets:lookup(msgservertable, useredis),
     if
-        UseHttpGpsFlag == 1 ->
+        UseHttpGpsFlag =:= 1 ->
             ets:insert(msgservertable, {usehttpgps, 1});
         true ->
             ets:insert(msgservertable, {usehttpgps, 0})
@@ -64,7 +64,6 @@ startserver(StartArgs) ->
     ets:insert(msgservertable, {redispid, undefined}),
 	ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),
-    ets:insert(msgservertable, {dblog, []}),
     
     % Need revisit
     ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
@@ -245,10 +244,10 @@ vdr_log_process(VDRList, DispLog) ->
 			Pid ! {Pid, Count},
 			vdr_log_process(VDRList, DispLog);
 		{save, VDRID, FromVDR, MsgBin, DateTime} ->
-			VDRInclList = [C || C <- VDRList, C == VDRID],
+			VDRInclList = [C || C <- VDRList, C =:= VDRID],
 			Len = length(VDRInclList),
 			if
-				Len == 1 ->
+				Len =:= 1 ->
 					save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog)
 			end,
 			vdr_log_process(VDRList, DispLog);
@@ -301,10 +300,10 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 			vdr_online_table_process([], []);
 		{add, VID, DateTime} ->
 			ListExclVID = [{VDRID, DTList}      || {VDRID, DTList}      <- VDROnlineList, VDRID =/= VID],
-			ListInclVID = [{VDRID0, DTList0}    || {VDRID0, DTList0}    <- VDROnlineList, VDRID0 == VID],
+			ListInclVID = [{VDRID0, DTList0}    || {VDRID0, DTList0}    <- VDROnlineList, VDRID0 =:= VID],
 			Length = length(ListInclVID),
 			if
-				Length == 1 ->
+				Length =:= 1 ->
 					[{VDRID1, DTList1}] = ListInclVID,
 					NewDTList = lists:merge([DTList1, [DateTime]]),
 					ListNew = lists:merge([ListExclVID, [{VDRID1, NewDTList}]]),
@@ -315,10 +314,10 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 			end;
 		{addoff, VID, DateTime} ->
 			ListExclVID = [{VDRID, DTList}      || {VDRID, DTList}      <- VDROfflineList, VDRID =/= VID],
-			ListInclVID = [{VDRID0, DTList0}    || {VDRID0, DTList0}    <- VDROfflineList, VDRID0 == VID],
+			ListInclVID = [{VDRID0, DTList0}    || {VDRID0, DTList0}    <- VDROfflineList, VDRID0 =:= VID],
 			Length = length(ListInclVID),
 			if
-				Length == 1 ->
+				Length =:= 1 ->
 					[{VDRID1, DTList1}] = ListInclVID,
 					NewDTList = lists:merge([DTList1, [DateTime]]),
 					ListNew = lists:merge([ListExclVID, [{VDRID1, NewDTList}]]),
@@ -332,33 +331,33 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 			CountOff = length(VDROfflineList),
 			Pid ! {Pid, {CountOn, CountOff}};
 		{Pid, count, VID} ->
-		    ListInclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID == VID],
-		    ListInclVIDOff = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROfflineList, VDRID0 == VID],
+		    ListInclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =:= VID],
+		    ListInclVIDOff = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROfflineList, VDRID0 =:= VID],
 			CountOn = length(ListInclVIDOn),
 			CountOff = length(ListInclVIDOff),
 			Pid ! {Pid, {CountOn, CountOff}},
 			vdr_online_table_process(VDROnlineList, VDROfflineList);
 		{Pid, get, VID} ->
-			ListInclVIDOn = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 == VID],
+			ListInclVIDOn = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 =:= VID],
 			LengthOn = length(ListInclVIDOn),
-			ListInclVIDOff = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 == VID],
+			ListInclVIDOff = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 =:= VID],
 			LengthOff = length(ListInclVIDOff),
 			if
-                LengthOn == 1 and LengthOff == 1 ->
+				LengthOn =:= 1, LengthOff =:= 1 ->
 					[{_VDRID1, DTList1}] = ListInclVIDOn,
 					[{_VDRID2, DTList2}] = ListInclVIDOff,
 					Pid ! {Pid, {DTList1, DTList2}},
-					vdr_online_process(VDROnlineList, VDROfflineList);
-				LengthOn == 1 and LengthOff /= 1 ->
+					vdr_online_table_process(VDROnlineList, VDROfflineList);
+				LengthOn =:= 1, LengthOff =/= 1 ->
 					[{_VDRID1, DTList1}] = ListInclVIDOn,
 					ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
 					Pid ! {Pid, {DTList1, []}},
-					vdr_online_process(VDROnlineList, ListExclVIDOff);
-				LengthOn /= 1 and LengthOff == 1 ->
+					vdr_online_table_process(VDROnlineList, ListExclVIDOff);
+				LengthOn =/= 1, LengthOff =:= 1 ->
 					ListExclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
 					[{_VDRID2, DTList2}] = ListInclVIDOff,
 					Pid ! {Pid, {[], DTList2}},
-					vdr_online_process(ListExclVIDOn, VDROfflineList);
+					vdr_online_table_process(ListExclVIDOn, VDROfflineList);
 				true ->
 					ListExclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
 					ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
@@ -368,7 +367,7 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 		{clear, VID} ->
 			ListExclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
 			ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
-			vdr_online_table_process(ListExclVID, ListExclVIDOff);
+			vdr_online_table_process(ListExclVIDOn, ListExclVIDOff);
 		_ ->
 			log:loginfo("VDR Online process : unknown message"),
 			vdr_online_table_process(VDROnlineList, VDROfflineList)
@@ -427,13 +426,13 @@ drivertable_insert_delete_process(DispLog) ->
 		    drivertable_insert_delete_process(0);
 		{chkinsdriverinfo, {DriverID, LicNo, CertCode, VDRAuthCode}} ->		% Check and insert
 			if
-				DriverID == undefined ->
+				DriverID =:= undefined ->
 					log:loginfo("Cannot get driver item by driver undefined id", DispLog);
 				true ->
 					DriverInfos = ets:match(drivertable, {'$1', DriverID, '_', '_', '_'}),
 					DriverInfosCount = length(DriverInfos),
 					if
-						DriverInfosCount == 0 orelse DriverInfosCount == 1 ->
+						DriverInfosCount =:= 0 orelse DriverInfosCount =:= 1 ->
 							DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
 							log:loginfo("Insert new driver item : ~p", [DriverInfoItem], DispLog),
 							ets:insert(drivertable, DriverInfoItem);
@@ -449,7 +448,7 @@ drivertable_insert_delete_process(DispLog) ->
 		    DriverInfos = ets:match(drivertable, {'_', '$1', '$2', CertCode, '_'}),
     		DriverInfosCount = length(DriverInfos),
 			if
-				DriverInfosCount == 1 ->
+				DriverInfosCount =:= 1 ->
 					[[DriverID, LicNo]] = DriverInfos,
 					DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode},
 					ets:insert(drivertable, DriverInfoItem);
@@ -461,7 +460,7 @@ drivertable_insert_delete_process(DispLog) ->
 		    DriverInfos = ets:match(drivertable, {'_', '$1', '$2', CertCode, '_'}),
     		DriverInfosCount = length(DriverInfos),
 			if
-				DriverInfosCount == 1 ->
+				DriverInfosCount =:= 1 ->
 					[[DriverID, LicNoRec]] = DriverInfos,
 					DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNoRec, certcode=CertCode, vdrauthcode=VDRAuthCode},
 					%log:loginfo("Change driver item online state : ~p", [DriverInfoItem]),
@@ -476,10 +475,10 @@ drivertable_insert_delete_process(DispLog) ->
 		    DriverInfos = ets:match(drivertable, {'_', '_', '_', '$1', VDRAuthCode}),
     		DriverInfosCount = length(DriverInfos),
 			if
-				DriverInfosCount == 1 ->
+				DriverInfosCount =:= 1 ->
 					[[CertCodeBin]] = DriverInfos,
 					if
-						CertCodeBin == undefined ->
+						CertCodeBin =:= undefined ->
 							Pid ! {Pid, <<"">>};
 						true ->
 							Pid ! {Pid, CertCodeBin}
@@ -512,7 +511,7 @@ lastpostable_insert_delete_process() ->
 		    Infos = ets:match(lastpostable, {'_', VID, '$1', '$2'}),
 			InfoCount = length(Infos),
 			if
-				InfoCount == 1 ->	
+				InfoCount =:= 1 ->	
 					[[Lon, Lat]] = Infos,
 					Pid ! {Pid, [Lon, Lat]};
 				true ->
@@ -524,7 +523,7 @@ lastpostable_insert_delete_process() ->
 		    Infos = ets:match(lastpostable, {'$1', VID, '_', '_'}),
 			InfoCount = length(Infos),
 			if
-				InfoCount == 0 ->	
+				InfoCount =:= 0 ->	
 					LastPosItem = #lastposinfo{vehicleid=VID,longitude=Lon,latitude=Lat},
 					ets:insert(lastpostable, LastPosItem);
 				true ->
@@ -669,7 +668,7 @@ code_convertor_process(DispLog) ->
 connection_info_process(List) ->
     Len = length(List),
     if
-        Len == ?CONN_STAT_INFO_COUNT ->
+        Len =:= ?CONN_STAT_INFO_COUNT ->
         	receive
         		stop ->
         			ok;
@@ -700,7 +699,7 @@ connection_info_process(List) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 receive_redis_init_msg(UseRedis, Count) ->
     if
-        UseRedis == 1 ->
+        UseRedis =:= 1 ->
             if
                 Count > 20 ->
                     {error, "Redis is not ready"};

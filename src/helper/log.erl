@@ -23,13 +23,13 @@ loginfo(Data, DispLog) when is_binary(Data),
 							is_integer(DispLog) ->
     try
 		if
-			DispLog == 1 ->
+			DispLog =:= 1 ->
 				error_logger:info_msg(binary_to_list(Data))
 		end
     catch
         Oper:Msg ->
 			if
-				DispLog == 1 ->
+				DispLog =:= 1 ->
 					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
 			end
     end
@@ -37,19 +37,19 @@ loginfo(Data, DispLog) when is_list(Data),
 							is_integer(DispLog) ->
     try
 		if
-			DispLog == 1 ->
+			DispLog =:= 1 ->
 				error_logger:info_msg(Data)
 		end
     catch
         Oper:Msg ->
 			if
-				DispLog == 1 ->
+				DispLog =:= 1 ->
 					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
 			end
     end;
 loginfo(_Data, DispLog) ->
 	if
-		DispLog == 1 ->
+		DispLog =:= 1 ->
 			error_logger:error_msg("loginfo fails : no binary or list")
 	end.
 
@@ -70,13 +70,13 @@ loginfo(Format, Data, DispLog) when is_string(Format),
 									is_binary(Data) ->
     try
 		if
-			DispLog == 1 ->
+			DispLog =:= 1 ->
 				error_logger:info_msg(Format, binary_to_list(Data))
 		end
     catch
         Oper:Msg ->
 			if
-				DispLog == 1 ->
+				DispLog =:= 1 ->
 					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
 			end
     end;
@@ -84,19 +84,19 @@ loginfo(Format, Data, DispLog) when is_string(Format),
 									is_list(Data) ->
     try
 		if
-			DispLog == 1 ->
+			DispLog =:= 1 ->
 				error_logger:info_msg(Format, Data)
 		end
     catch
         Oper:Msg ->
 			if
-				DispLog == 1 ->
+				DispLog =:= 1 ->
 					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
 			end
     end;
 loginfo(_Format, _Data, DispLog) ->
 	if
-		DispLog == 1 ->
+		DispLog =:= 1 ->
 			error_logger:error_msg("loginfo fails : no binary or list")
 	end
 
