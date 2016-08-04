@@ -37,6 +37,11 @@
 -define(CONN_STAT_FROM_GW,     20). % Count for MSGes from gateway
 -define(CONN_STAT_INFO_COUNT,  21). % Count for connection status information, should be of the last one and for an indication of the length
 
+%
+% Timeout definitions
+%
+-define(TIMEOUT_CC_INIT,    5000). 
+-define(TIMEOUT_CC_REQ,    10000). 
 
 -define(SUP_WAIT_INTVL_MS, 5000).
 
