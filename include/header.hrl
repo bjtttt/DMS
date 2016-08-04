@@ -2,6 +2,9 @@
 % header.hrl
 %
 
+-define(SUP_MAXR, 3).
+-define(SUP_MAXT, 1).
+
 -define(DEF_PORT_MYSQL,	3306).
 -define(DEF_PORT_VDR,	6000).
 -define(DEF_PORT_MON, 	6001).
