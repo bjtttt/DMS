@@ -11,7 +11,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
-%       Convert GPS
+%       Convert GPS to address
 % Parameter :
 %       InitialIPPort   : 
 %       State           : 
@@ -26,14 +26,14 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
     receive
         {Pid, normal, Request} ->
             [LonReq, LatReq] = Request,
-            case convertrequest(Request) of
+            case convert_request(Request) of
                 {ok, SRequest} ->
                     FullRequest = lists:append(["http://", 
                                                InitialIPPort, 
                                                "/coordinate/simple?sid=15001&xys=", 
                                                SRequest, 
                                                "&resType=xml&rid=123&key=1831beb01605f760589221fdd6f2cdfb7412a767dbc0f004854457f59fb16ab863a3a1722cef553f"]),
-                    %log:loginfo("Normal Position : ~p", [FullRequest]),
+                    log:loginfo("Normal Position : ~p", [FullRequest], DispLog)
                     case State of
                         inited ->
                             try
@@ -59,7 +59,7 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                                                                                 "/rgeocode/simple?sid=7001&region=", 
                                                                                                 SRequest2, 
                                                                                                 "&poinum=1&range=3000&encode=UTF-8&resType=json&rid=$rid&roadnum=1&crossnum=0&show_near_districts=true&key=1831beb01605f760589221fdd6f2cdfb7412a767dbc0f004854457f59fb16ab863a3a1722cef553f"]),
-                                                                    %log:loginfo("Normal Address : ~p", [FullRequest2]),
+                                                                    log:loginfo("Normal Address : ~p", [FullRequest2], DispLog)
                                                                     try
                                                                         case httpc:request(FullRequest2) of
                                                                             {ok, {{_Version2, 200, _ReasonPhrase2}, _Headers2, Body2}} ->
@@ -72,63 +72,63 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                                                                         FullAddr = binary_to_list(FullAddrBin2),
                                                                                         Pid ! [Lon, Lat, FullAddr]
                                                                                 end,
-                                                                                http_gps_deamon(InitialIPPort, State, Count+1, ACount, FCount, FACount);
+                                                                                http_gps_deamon(InitialIPPort, State, Count+1, ACount, FCount, FACount, DispLog);
                                                                             {error, Reason2} ->
-                                                                                log:loginfo("HTTP GPS address request fails : ~p", [Reason2]),
+                                                                                log:loginfo("HTTP GPS address request fails : ~p", [Reason2], DispLog),
                                                                                 Pid ! [Lon, Lat, []],
-                                                                                http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                                                                http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                                                         end
                                                                     catch
                                                                         Oper2:ExReason2 ->
-                                                                            log:loginfo("HTTP GPS address request exception : (~p) ~p", [Oper2, ExReason2]),
+                                                                            log:loginfo("HTTP GPS address request exception : (~p) ~p", [Oper2, ExReason2], DispLog),
                                                                             Pid ! [Lon, Lat, []],
-                                                                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                                                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                                                     end;
                                                                 error ->
-                                                                    log:loginfo("HTTP GPS address request fails because of conversion error"),
+                                                                    log:loginfo("HTTP GPS address request fails because of conversion error", DispLog),
                                                                     Pid ! [Lon, Lat, []],
-                                                                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                                                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                                             end
                                                         catch
                                                             _:_ ->
-                                                                log:loginfo("HTTP GPS request fails : cannot convert longitude and latitude ~p", [Body]),
+                                                                log:loginfo("HTTP GPS request fails : cannot convert longitude and latitude ~p", [Body], DispLog),
                                                                 Pid ! [LonReq, LatReq, []],
-                                                                http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                                                http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                                         end;
                                                     _ ->
-                                                        log:loginfo("HTTP GPS request fails : cannot convert longitude/latitude ~p", [Body]),
+                                                        log:loginfo("HTTP GPS request fails : cannot convert longitude/latitude ~p", [Body], DispLog),
                                                         Pid ! [LonReq, LatReq, []],
-                                                        http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                                        http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                                 end;
                                             _ ->
-                                                log:loginfo("HTTP GPS request fails : response error ~p", [Body]),
+                                                log:loginfo("HTTP GPS request fails : response error ~p", [Body], DispLog),
                                                 Pid ! [LonReq, LatReq, []],
-                                                http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                                http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                         end;
                                     {error, Reason} ->
-                                        log:loginfo("HTTP GPS request fails : ~p", [Reason]),
+                                        log:loginfo("HTTP GPS request fails : ~p", [Reason], DispLog),
                                         Pid ! [LonReq, LatReq, []],
-                                        http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                        http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                                 end
                             catch
                                 Oper:ExReason ->
-                                    log:loginfo("HTTP GPS request exception : (~p) ~p", [Oper, ExReason]),
+                                    log:loginfo("HTTP GPS request exception : (~p) ~p", [Oper, ExReason], DispLog),
                                     Pid ! [LonReq, LatReq, []],
-                                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                             end;
                         uninit ->
-                            %log:loginfo("HTTP GPS request fails because of uninit state"),
+                            log:loginfo("HTTP GPS request fails because of uninit state", DispLog),
                             Pid ! [LonReq, LatReq, []],
-                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount);
+                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog);
                         _ ->
-                            log:loginfo("HTTP GPS request fails because of unknown state"),
+                            log:loginfo("HTTP GPS request fails because of unknown state", DispLog),
                             Pid ! [LonReq, LatReq, []],
-                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
                     end;
                 error ->
-                    log:loginfo("HTTP GPS request fails because of unknown state"),
+                    log:loginfo("HTTP GPS request fails because of unknown state", DispLog),
                     Pid ! [LonReq, LatReq, []],
-                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount)
+                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount+1, FACount, DispLog)
             end;
         {Pid, abnormal, Request} ->
             [LonReq, LatReq] = Request,
@@ -139,7 +139,7 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                                "/rgeocode/simple?sid=7001&region=", 
                                                SRequest, 
                                                "&poinum=1&range=3000&encode=UTF-8&resType=json&rid=$rid&roadnum=1&crossnum=0&show_near_districts=true&key=1831beb01605f760589221fdd6f2cdfb7412a767dbc0f004854457f59fb16ab863a3a1722cef553f"]),
-                    %log:loginfo("Abnormal Address : ~p", [FullRequest]),
+                    log:loginfo("Abnormal Address : ~p", [FullRequest], DispLog),
                     case State of
                         inited ->
                             try
@@ -154,34 +154,39 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                                 FullAddr = binary_to_list(FullAddrBin),
                                                 Pid ! [LonReq, LatReq, FullAddr]
                                         end,
-                                        http_gps_deamon(InitialIPPort, State, Count, ACount+1, FCount, FACount);
+                                        http_gps_deamon(InitialIPPort, State, Count, ACount+1, FCount, FACount, DispLog);
                                     {error, Reason} ->
-                                        log:loginfo("HTTP GPS address request fails : ~p", [Reason]),
+                                        log:loginfo("HTTP GPS address request fails : ~p", [Reason], DispLog),
                                         Pid ! [LonReq, LatReq, []],
-                                        http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1)
+                                        http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1, DispLog)
                                 end
                             catch
                                 Oper:ExReason ->
                                     log:loginfo("HTTP GPS address request exception : (~p) ~p", [Oper, ExReason]),
                                     Pid ! [LonReq, LatReq, []],
-                                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1)
+                                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1, DispLog)
                             end;
                         uninit ->
-                            %log:loginfo("HTTP GPS address request fails because of uninit state"),
+                            log:loginfo("HTTP GPS address request fails because of uninit state", DispLog),
                             Pid ! [LonReq, LatReq, []],
-                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1);
+                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1, DispLog);
                         _ ->
-                            log:loginfo("HTTP GPS request fails because of unknown state"),
+                            log:loginfo("HTTP GPS request fails because of unknown state", DispLog),
                             Pid ! [LonReq, LatReq, []],
-                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1)
+                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1, DispLog)
                     end;
                 error ->
-                    log:loginfo("HTTP GPS address request fails because of conversion error"),
+                    log:loginfo("HTTP GPS address request fails because of conversion error", DispLog),
                     Pid ! [LonReq, LatReq, []],
-                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1)
+                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount+1, DispLog)
             end;
         {server, IPPort} ->
-            http_gps_deamon(IPPort, State, Count, ACount, FCount, FACount);
+            % Need restart?
+            http_gps_deamon(IPPort, State, Count, ACount, FCount, FACount, DispLog, DispLog);
+        enablelog ->
+            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog, 1);
+        disablelog ->
+            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog, 0);
         init ->
             case State of
                 uninit ->
@@ -189,43 +194,43 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                         ok ->
                             http_gps_deamon(InitialIPPort, inited, 0, 0, 0, 0);
                         {error, Reason} ->
-                            log:loginfo("Cannot start HTTP GPS inets : ~p", [Reason]),
-                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount)
+                            log:loginfo("Cannot start HTTP GPS inets : ~p", [Reason], DispLog),
+                            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog)
                     end;
                 inited ->
-                    log:loginfo("HTTP GPS inets already inited for init command"),
-                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount);
+                    log:loginfo("HTTP GPS inets already inited for init command", DispLog),
+                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog);
                 _ ->
-                    log:loginfo("HTTP GPS inets unknown state for init command"),
-                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount)
+                    log:loginfo("HTTP GPS inets unknown state for init command", DispLog),
+                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog)
             end;
         release ->
             case State of
                 uninit ->
-                    log:loginfo("HTTP GPS inets already uninit for release command"),
-                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount);
+                    log:loginfo("HTTP GPS inets already uninit for release command", DispLog),
+                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog);
                 inited ->
                     inets:stop(),
-                    http_gps_deamon(InitialIPPort, uninit, Count, ACount, FCount, FACount);
+                    http_gps_deamon(InitialIPPort, uninit, Count, ACount, FCount, FACount, DispLog);
                 _ ->
-                    log:loginfo("HTTP GPS inets unknwon state for release command"),
-                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount)
+                    log:loginfo("HTTP GPS inets unknwon state for release command", DispLog),
+                    http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog)
             end;
         stop ->
             case State of
                 uninit ->
-                    log:loginfo("HTTP GPS inets already uninit for stop command");
+                    log:loginfo("HTTP GPS inets already uninit for stop command", DispLog);
                 inited ->
                     inets:stop();
                 _ ->
-                    log:loginfo("HTTP GPS inets unknwon state for stop command")
+                    log:loginfo("HTTP GPS inets unknwon state for stop command", DispLog)
             end;
         {Pid, get} ->
             Pid ! {InitialIPPort, State, Count, ACount, FCount, FACount},
-            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount);
+            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog);
         _ ->
-            log:loginfo("HTTP GPS process receive unknown msg."),
-            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount)
+            log:loginfo("HTTP GPS process receive unknown msg.", DispLog),
+            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -234,54 +239,46 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
 % Return binary address
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-get_full_address(Body) ->
-    get_full_address(Body, 0).
-
 get_full_address(Body, DispLog) ->
-    %log:loginfo("Body : ~p", [Body]),
+    log:loginfo("Body : ~p", [Body], DispLog)
     Province = get_province_name(Body),
-    %log:loginfo("Province : ~p", [Province]),
+    log:loginfo("Province : ~p", [Province], DispLog),
     City = get_city_name(Body),
-    %log:loginfo("City : ~p", [City]),
+    log:loginfo("City : ~p", [City], DispLog),
     District = get_district_name(Body),
-    %log:loginfo("District : ~p", [District]),
+    log:loginfo("District : ~p", [District], DispLog),
     Road = get_road_name(Body),
-    %log:loginfo("Road : ~p", [Road]),
+    log:loginfo("Road : ~p", [Road], DispLog),
     BuildingAddress = get_building_address(Body),
-    %log:loginfo("BuildingAddress : ~p", [BuildingAddress]),
+    log:loginfo("BuildingAddress : ~p", [BuildingAddress], DispLog),
     BuildingName = get_building_name(Body),
-    %log:loginfo("BuildingName : ~p", [BuildingName]),
+    log:loginfo("BuildingName : ~p", [BuildingName], DispLog),
     BuildingDirection = get_building_direction(Body),
-    %log:loginfo("BuildingDirection : ~p", [BuildingDirection]),
+    log:loginfo("BuildingDirection : ~p", [BuildingDirection], DispLog),
     BuildingDistance = get_building_distance(Body),
-    %log:loginfo("BuildingDistance : ~p", [BuildingDistance]),
-    %list_to_binary([Province, City, District, Road]).
+    log:loginfo("BuildingDistance : ~p", [BuildingDistance], DispLog),
     if
         BuildingDirection == <<"">> orelse BuildingDistance == <<"">> ->
             Address = list_to_binary([Province, City, District, Road, BuildingAddress, BuildingName]),
             Address1 = binary:replace(Address, <<"(">>, <<"[">>, [global]),
             Address2 = binary:replace(Address1, <<")">>, <<"]">>, [global]),
-            %log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address2), is_list(Address2), Address2]),
+            log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address2), is_list(Address2), Address2], DispLog)
             Address2;
         true ->
             Address = list_to_binary([Province, City, District, Road, BuildingAddress, BuildingName, BuildingDirection, BuildingDistance]),
             Address1 = binary:replace(Address, <<"(">>, <<"[">>, [global]),
             Address2 = binary:replace(Address1, <<")">>, <<"]">>, [global]),
-            %log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address2), is_list(Address2), Address2]),
+            log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address2), is_list(Address2), Address2], DispLog),
             Address2
     end.
-    %log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address), is_list(Address), Address]),
-    %Address.
-    %CCPid ! {Pid, utf8togbk, Address},
-    %receive
-    %   AddressNew ->
-    %       log:loginfo("New Address : (Binary ~p, List ~p) ~p", [is_binary(AddressNew), is_list(AddressNew), AddressNew]),
-    %       list_to_binary(AddressNew)
-    %after ?TIMEOUT_CC_PROCESS ->
-    %       log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address), is_list(Address), Address]),
-    %       list_to_binary(Address)
-    %end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_province_name(Body) ->
     try
         ProvinceBinsCheck = binary:split(Body, [<<"\"province\":{\"name\":\"\"">>], [global]),
@@ -300,16 +297,6 @@ get_province_name(Body) ->
                         if
                             Len2 > 0 ->
                                 lists:nth(1, ProvinceInfoBins);
-                                %Province = lists:nth(1, ProvinceInfoBins),
-                                %CCPid ! {Pid, utf8togbk, Province},
-                                %receive
-                                %   ProvinceNew ->
-                                %       log:loginfo("Province New : (Binary ~p, List ~p) ~p", [is_binary(ProvinceNew), is_list(ProvinceNew), ProvinceNew]),
-                                %       list_to_binary(ProvinceNew)
-                                %after ?TIMEOUT_CC_PROCESS ->
-                                %       log:loginfo("Province : (Binary ~p, List ~p) ~p", [is_binary(Province), is_list(Province), Province]),
-                                %       list_to_binary(Province)
-                                %end;
                             true ->
                                 <<"">>
                         end;
@@ -322,6 +309,13 @@ get_province_name(Body) ->
             <<"">>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_city_name(Body) ->
     try
         CityBins = binary:split(Body, [<<"\"city\":{\"citycode\":\"">>], [global]),
@@ -338,21 +332,10 @@ get_city_name(Body) ->
                         <<"">>;
                     true ->
                         CityInfoBins = binary:split(CityInfo, [<<"\"name\":\"">>, <<"\",\"ename\":\"">>], [global]),
-                        %log:loginfo("CityInfoBins : (~p)~n~p", [length(CityInfoBins), CityInfoBins]),
                         Len2 = length(CityInfoBins),
                         if
                             Len2 > 1 ->
                                 lists:nth(2, CityInfoBins);
-                                %City = lists:nth(2, CityInfoBins),
-                                %CCPid ! {Pid, utf8togbk, City},
-                                %receive
-                                %   CityNew ->
-                                %       log:loginfo("City New : (Binary ~p, List ~p) ~p", [is_binary(CityNew), is_list(CityNew), CityNew]),
-                                %       list_to_binary(CityNew)
-                                %after ?TIMEOUT_CC_PROCESS ->
-                                %       log:loginfo("City : (Binary ~p, List ~p) ~p", [is_binary(City), is_list(City), City]),
-                                %       list_to_binary(City)
-                                %end;
                             true ->
                                 <<"">>
                         end
@@ -365,6 +348,13 @@ get_city_name(Body) ->
             <<"">>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_district_name(Body) ->
     try
         DistrictBinsCheck = binary:split(Body, [<<"\"district\":{\"name\":\"\"">>], [global]),
@@ -383,16 +373,6 @@ get_district_name(Body) ->
                         if
                             Len2 > 0 ->
                                 lists:nth(1, DistrictInfoBins);
-                                %Dictrict = lists:nth(1, DistrictInfoBins),
-                                %CCPid ! {Pid, utf8togbk, Dictrict},
-                                %receive
-                                %   DictrictNew ->
-                                %       log:loginfo("Dictrict New : (Binary ~p, List ~p) ~p", [is_binary(DictrictNew), is_list(DictrictNew), DictrictNew]),
-                                %       list_to_binary(DictrictNew)
-                                %after ?TIMEOUT_CC_PROCESS ->
-                                %       log:loginfo("Dictrict : (Binary ~p, List ~p) ~p", [is_binary(Dictrict), is_list(Dictrict), Dictrict]),
-                                %       list_to_binary(Dictrict)
-                                %end;
                             true ->
                                 <<"">>
                         end;
@@ -405,6 +385,13 @@ get_district_name(Body) ->
             <<"">>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_road_name(Body) ->
     try
         RoadBins = binary:split(Body, [<<"\"roadlist\":[{\"id\":\"">>], [global]),
@@ -421,21 +408,10 @@ get_road_name(Body) ->
                         <<"">>;
                     true ->
                         RoadInfoBins = binary:split(RoadInfo, [<<"\"name\":\"">>, <<"\",\"ename\":\"">>], [global]),
-                        %log:loginfo("RoadInfoBins : (~p)~n~p", [length(RoadInfoBins), RoadInfoBins]),
                         Len = length(RoadInfoBins),
                         if
                             Len > 1 ->
                                 lists:nth(2, RoadInfoBins);
-                                %Road = lists:nth(2, RoadInfoBins),
-                                %CCPid ! {Pid, utf8togbk, Road},
-                                %receive
-                                %   RoadNew ->
-                                %       log:loginfo("Road New : (Binary ~p, List ~p) ~p", [is_binary(RoadNew), is_list(RoadNew), RoadNew]),
-                                %       list_to_binary(RoadNew)
-                                %after ?TIMEOUT_CC_PROCESS ->
-                                %       log:loginfo("Road : (Binary ~p, List ~p) ~p", [is_binary(Road), is_list(Road), Road]),
-                                %       list_to_binary(Road)
-                                %end;
                             true ->
                                 <<"">>
                         end
@@ -448,6 +424,13 @@ get_road_name(Body) ->
             <<"">>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_building_address(Body) ->
     try
         RoadBins = binary:split(Body, [<<"\"list\":[{\"poilist\":[{\"distance\":\"">>], [global]),
@@ -473,6 +456,13 @@ get_building_address(Body) ->
             <<"">>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_building_name(Body) ->
     try
         RoadBins = binary:split(Body, [<<"\"list\":[{\"poilist\":[{\"distance\":\"">>], [global]),
@@ -485,7 +475,7 @@ get_building_name(Body) ->
                 RoadInfoBinsCheck = binary:split(RoadInfoPureBody, [<<"\"name\":\"">>, <<"\",\"type\":\"">>], [global]),
                 LenCheck = length(RoadInfoBinsCheck),
                 if
-                    LenCheck =/= 3->
+                    LenCheck =/= 3 ->
                         <<"">>;
                     true ->
                         lists:nth(2, RoadInfoBinsCheck)
@@ -498,6 +488,13 @@ get_building_name(Body) ->
             <<"">>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Body    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_building_direction(Body) ->
     try
         RoadBins = binary:split(Body, [<<"\"list\":[{\"poilist\":[{\"distance\":\"">>], [global]),
@@ -555,8 +552,7 @@ get_building_direction(Body) ->
 %
 % Description :
 % Parameter :
-%       Lon : longitude - Jingdu(Chinese)
-%       Lat : latitude - Weidu(Chinese)
+%       Body    :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_building_distance(Body) ->

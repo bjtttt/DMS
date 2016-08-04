@@ -26,11 +26,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start(StartType, StartArgs) ->
+start(_StartType, StartArgs) ->
     Len = length(StartArgs),
     if
         Len == 2 ->
-            startserver(StartType, StartArgs);
+            startserver(StartArgs);
         true ->
             log:loginfo("Parameter count error : ~p", [Len])
     end.
@@ -44,7 +44,7 @@ start(StartType, StartArgs) ->
 %             others    -> doesn't use HttpGps server
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-startserver(StartType, StartArgs) ->
+startserver(StartArgs) ->
     [UseRedisFlag, UseHttpGpsFlag] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
     if
@@ -124,16 +124,16 @@ startserver(StartType, StartArgs) ->
                     VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
                     ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
 					
-                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
+                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process(0) end),
                     ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
 
 					LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
                     ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
 
-					VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
+					VDRLogPid = spawn(fun() -> vdr_log_process([], 0) end),
     				ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
 
-					VDROnlinePid = spawn(fun() -> vdr_online_process([]) end),
+					VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
     				ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
     				
 					case init_vdr_db_table() of
@@ -152,16 +152,16 @@ startserver(StartType, StartArgs) ->
 											receive
 						                        created ->
 						                            log:loginfo("Code convertor table is created"),
-													HttpGpsPid = spawn(fun() -> http_gps_deamon(?DEF_HTTPGPS_SERVER, uninit, 0, 0, 0, 0, 1) end),
+													HttpGpsPid = spawn(fun() -> httpgps:http_gps_deamon(?DEF_HTTPGPS_SERVER, uninit, 0, 0, 0, 0, 1) end),
 													ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
 													log:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
-													case HttpGps of
+													case UseHttpGps of
 														1 ->
 															HttpGpsPid ! init;
 														_ ->
 															ok
 													end,
-						                            {ok, AppPid}
+						                            {ok, self()}
 						                        after ?TIMEOUT_CC_INIT ->
 						                            {error, "ERROR : code convertor table is timeout"}
 											end
@@ -218,40 +218,52 @@ init_last_pos_table() ->
 	ets:delete_all_objects(lastpostable),
 	log:loginfo("Init last position table.").
 
-vdr_log_process(VDRList) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+vdr_log_process(VDRList, DispLog) ->
 	receive
 		stop ->
 			log:loginfo("VDR log process stops.");
 		reset ->
-			vdr_log_process([]);
+			vdr_log_process([], DispLog);
+		enablelog ->
+		    vdr_log_process(VDRList, 1);
+		disablelog ->
+		    vdr_log_process(VDRList, 0);
 		{set, VID} ->
-			MidVDRList = [C || C <- VDRList, C =/= VID],
-			NewVDRList = lists:merge([MidVDRList, [VID]]),
-			%log:loginfo("SET : VDRList ~p, MidVDRList ~p, NewVDRList ~p", [VDRList, MidVDRList, NewVDRList]),
-			vdr_log_process(NewVDRList);
+			VDRExclList = [C || C <- VDRList, C =/= VID],
+			NewVDRList = lists:merge([VDRExclList, [VID]]),
+			vdr_log_process(NewVDRList, DispLog);
 		{clear, VID} ->
-			MidVDRList = [C || C <- VDRList, C =/= VID],
-			%log:loginfo("CLEAR : VDRList ~p, MidVDRList ~pp", [VDRList, MidVDRList]),
-			vdr_log_process(MidVDRList);
-		{Pid, get} ->
-			Pid ! {Pid, VDRList},
-			vdr_log_process(VDRList);
-		{_Pid, save, VDRID, FromVDR, MsgBin, DateTime} ->
-			MidVDRList = [C || C <- VDRList, C == VDRID],
-			Len = length(MidVDRList),
+			VDRExclList = [C || C <- VDRList, C =/= VID],
+			vdr_log_process(VDRExclList, DispLog);
+		{Pid, count} ->
+    		Count = length(VDRList),
+			Pid ! {Pid, Count},
+			vdr_log_process(VDRList, DispLog);
+		{save, VDRID, FromVDR, MsgBin, DateTime} ->
+			VDRInclList = [C || C <- VDRList, C == VDRID],
+			Len = length(VDRInclList),
 			if
-				Len < 1 ->
-					ok;
-				true ->
-					save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime)
+				Len == 1 ->
+					save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog)
 			end,
-			vdr_log_process(VDRList);
+			vdr_log_process(VDRList, DispLog);
 		_ ->
 			log:loginfo("VDR log process : unknown message"),
-			vdr_log_process(VDRList)
+			vdr_log_process(VDRList, DispLog)
 	end.
 
-save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog) ->
 	if
 		VDRID =/= undefined ->
 			File = "/tmp/log/vdr/VDR" ++ integer_to_list(VDRID) ++ ".log",
@@ -266,137 +278,106 @@ save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime) ->
 					end,
 					file:close(IOFile);
 				{error, Reason} ->
-					log:loginfo("Cannot open ~p : ~p", [File, Reason]);
+					log:loginfo("Cannot open ~p : ~p", [File, Reason], DispLog);
 				_ ->
-					log:loginfo("Cannot open ~p : unknown", [File])
+					log:loginfo("Cannot open ~p : unknown", [File], DispLog)
 			end;
 		true ->
 			ok
 	end.
 
-vdr_online_process(VDROnlineList) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%       This table records the VDR online/offline time
+% Parameters :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 	receive
 		stop ->
 			log:loginfo("VDR Online process stops.");
 		reset ->
-			vdr_online_process([]);
-		{_Pid, add, VID, DateTime} ->
-			MidVDROnlineList = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
-			VIDVDROnlineList = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 == VID],
-			Length = length(VIDVDROnlineList),
+			vdr_online_table_process([], []);
+		{add, VID, DateTime} ->
+			ListExclVID = [{VDRID, DTList}      || {VDRID, DTList}      <- VDROnlineList, VDRID =/= VID],
+			ListInclVID = [{VDRID0, DTList0}    || {VDRID0, DTList0}    <- VDROnlineList, VDRID0 == VID],
+			Length = length(ListInclVID),
 			if
 				Length == 1 ->
-					[{VDRID1, DTList1}] = VIDVDROnlineList,
-					NewDTList1 = lists:merge([DTList1, [DateTime]]),
-					NewVDROnlineList = lists:merge([MidVDROnlineList, [{VDRID1, NewDTList1}]]),
-					vdr_online_process(NewVDROnlineList);
+					[{VDRID1, DTList1}] = ListInclVID,
+					NewDTList = lists:merge([DTList1, [DateTime]]),
+					ListNew = lists:merge([ListExclVID, [{VDRID1, NewDTList}]]),
+					vdr_online_table_process(ListNew, VDROfflineList);
 				true ->
-					vdr_online_process(MidVDROnlineList)
+				    ListNew = lists:merge([ListExclVID, [{VID, [DateTime]}]]),
+					vdr_online_table_process(ListNew, VDROfflineList)
+			end;
+		{addoff, VID, DateTime} ->
+			ListExclVID = [{VDRID, DTList}      || {VDRID, DTList}      <- VDROfflineList, VDRID =/= VID],
+			ListInclVID = [{VDRID0, DTList0}    || {VDRID0, DTList0}    <- VDROfflineList, VDRID0 == VID],
+			Length = length(ListInclVID),
+			if
+				Length == 1 ->
+					[{VDRID1, DTList1}] = ListInclVID,
+					NewDTList = lists:merge([DTList1, [DateTime]]),
+					ListNew = lists:merge([ListExclVID, [{VDRID1, NewDTList}]]),
+					vdr_online_table_process(VDROnlineList, ListNew);
+				true ->
+				    ListNew = lists:merge([ListExclVID, [{VID, [DateTime]}]]),
+					vdr_online_table_process(VDROnlineList, ListNew)
 			end;
 		{Pid, count} ->
-			CountList = get_vdr_online_count(VDROnlineList),
-			Pid ! {Pid, CountList},
-			vdr_online_process(VDROnlineList);
+			CountOn = length(VDROnlineList),
+			CountOff = length(VDROfflineList),
+			Pid ! {Pid, {CountOn, CountOff}};
+		{Pid, count, VID} ->
+		    ListInclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID == VID],
+		    ListInclVIDOff = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROfflineList, VDRID0 == VID],
+			CountOn = length(ListInclVIDOn),
+			CountOff = length(ListInclVIDOff),
+			Pid ! {Pid, {CountOn, CountOff}},
+			vdr_online_table_process(VDROnlineList, VDROfflineList);
 		{Pid, get, VID} ->
-			VIDVDROnlineList = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 == VID],
-			Length = length(VIDVDROnlineList),
+			ListInclVIDOn = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 == VID],
+			LengthOn = length(ListInclVIDOn),
+			ListInclVIDOff = [{VDRID0, DTList0} || {VDRID0, DTList0} <- VDROnlineList, VDRID0 == VID],
+			LengthOff = length(ListInclVIDOff),
 			if
-				Length == 1 ->
-					[{_VDRID1, DTList1}] = VIDVDROnlineList,
-					Pid ! {Pid, DTList1},
-					vdr_online_process(VDROnlineList);
+                LengthOn == 1 and LengthOff == 1 ->
+					[{_VDRID1, DTList1}] = ListInclVIDOn,
+					[{_VDRID2, DTList2}] = ListInclVIDOff,
+					Pid ! {Pid, {DTList1, DTList2}},
+					vdr_online_process(VDROnlineList, VDROfflineList);
+				LengthOn == 1 and LengthOff /= 1 ->
+					[{_VDRID1, DTList1}] = ListInclVIDOn,
+					ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
+					Pid ! {Pid, {DTList1, []}},
+					vdr_online_process(VDROnlineList, ListExclVIDOff);
+				LengthOn /= 1 and LengthOff == 1 ->
+					ListExclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
+					[{_VDRID2, DTList2}] = ListInclVIDOff,
+					Pid ! {Pid, {[], DTList2}},
+					vdr_online_process(ListExclVIDOn, VDROfflineList);
 				true ->
-					MidVDROnlineList = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
-					Pid ! {Pid, []},
-					vdr_online_process(MidVDROnlineList)
+					ListExclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
+					ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
+					Pid ! {Pid, {[], []}},
+					vdr_online_table_process(ListExclVIDOn, ListExclVIDOff)
 			end;
-		{_Pid, clear, VID} ->
-			MidVDROnlineList = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
-			vdr_online_process(MidVDROnlineList);
+		{clear, VID} ->
+			ListExclVIDOn = [{VDRID, DTList} || {VDRID, DTList} <- VDROnlineList, VDRID =/= VID],
+			ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
+			vdr_online_table_process(ListExclVID, ListExclVIDOff);
 		_ ->
 			log:loginfo("VDR Online process : unknown message"),
-			vdr_online_process(VDROnlineList)
-	end.
-
-get_vdr_online_count(VDROnlineList) when is_list(VDROnlineList),
-										 length(VDROnlineList) > 0 ->
-	[H|T] = VDROnlineList,
-	{VDRID, DTList} = H,
-	DTCount = length(DTList),
-	if
-		DTCount > 1 ->
-			NewH = {VDRID, DTCount},
-			NewT = get_vdr_online_count(T),
-			lists:merge([NewH], NewT);
-		true ->
-			get_vdr_online_count(T)
-	end;
-get_vdr_online_count(_VDROnlineList) ->
-	[].
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% This process will operate device\vehicle table and alarm table
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-db_data_operation_process(DBPid) ->
-	receive
-		stop ->
-			log:loginfo("DB operation process stops.");
-		%{Pid, update, devicevehicle} ->
-		%	log:loginfo("DB operation process update device/vehicle."),
-		%	ProcPid = self(),
-		%	init_vdrdbtable(ProcPid, DBPid),
-		%	Pid ! {Pid, updateok},
-		%	db_data_operation_process(DBPid);
-		%{Pid, update, alarm} ->
-		%	log:loginfo("DB operation process update alarm."),
-		%	ProcPid = self(),
-		%	init_alarmtable(ProcPid, DBPid),
-		%	Pid ! {Pid, updateok},
-		%	db_data_operation_process(DBPid);
-		{_Pid, replace, alarm, VehicleID, AlarmList} ->
-			ets:delete(alarmtable, VehicleID),
-			ets:insert(alarmtable, AlarmList),
-			%Pid ! {Pid, relpaceok},
-			db_data_operation_process(DBPid);
-		{Pid, lookup, Table, Key} ->
-			Res = ets:lookup(Table, Key),
-			Pid ! {Pid, Res},
-			db_data_operation_process(DBPid);
-		{Pid, insert, Table, Object} ->
-			ets:insert(Table, Object),
-			Pid ! {Pid, insertok},
-			db_data_operation_process(DBPid);
-		{_Pid, insert, Table, Object, noresp} ->
-			ets:insert(Table, Object),
-			db_data_operation_process(DBPid);
-		{Pid, delete, Table, Key} ->
-			ets:delete(Table, Key),
-			Pid ! {Pid, deleteok},
-			db_data_operation_process(DBPid);
-		{_Pid, delete, Table, Key, noresp} ->
-			ets:delete(Table, Key),
-			db_data_operation_process(DBPid);
-		{Pid, clear, Table} ->
-			ets:delete_all_objects(Table),
-			Pid ! {Pid, clearok},
-			db_data_operation_process(DBPid);
-		{_Pid, clear, Table, noresp} ->
-			ets:delete_all_objects(Table),
-			db_data_operation_process(DBPid);
-		Msg ->
-			log:loginfo("DB operation process receive unknown msg : ~p", [Msg]),
-			db_data_operation_process(DBPid)
+			vdr_online_table_process(VDROnlineList, VDROfflineList)
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% Parameters:
-%   redis   : 1         -> use Redis
-%             others    -> doesn't use Redis, for the capacity test
-%   HttpGps : 1         -> use HttpGps server
-%             others    -> doesn't use HttpGps server
+% Description :
+% Parameters :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 vdrtable_insert_delete_process() ->
@@ -407,14 +388,14 @@ vdrtable_insert_delete_process() ->
 			ets:insert(vdrtable, Object),
 			Pid ! {Pid, ok},
 			vdrtable_insert_delete_process();
-		{_Pid, insert, Object, noresp} ->
+		{insert, Object} ->
 			ets:insert(vdrtable, Object),
 			vdrtable_insert_delete_process();
 		{Pid, delete, Key} ->
 			ets:delete(vdrtable, Key),
 			Pid ! {Pid, ok},
 			vdrtable_insert_delete_process();
-		{_Pid, delete, Key, noresp} ->
+		{delete, Key} ->
 			ets:delete(vdrtable, Key),
 			vdrtable_insert_delete_process();
 		{Pid, count} ->
@@ -430,53 +411,42 @@ vdrtable_insert_delete_process() ->
 			vdrtable_insert_delete_process()
 	end.
 
-discremove_vdr_by_socket(Scks, Sock) when is_list(Scks),
-									      length(Scks) > 0 ->
-	[[H]|T] = Scks,
-	ets:delete(vdrtable, H),
-	if
-		Sock =/= H ->
-			try
-				gen_tcp:close(H)
-			catch
-				_:_ ->
-					ok
-			end;
-		true ->
-			ok
-	end,
-	discremove_vdr_by_socket(T, Sock);
-discremove_vdr_by_socket(_Scks, _Sock) ->
-	ok.
-
-drivertable_insert_delete_process() ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameters :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+drivertable_insert_delete_process(DispLog) ->
 	receive
 		stop ->
 			log:loginfo("Driver table insert/delete process stops.");
-		{_Pid, chkinsdriverinfo, {DriverID, LicNo, CertCode, VDRAuthCode}} ->		% Check and insert
+		enablelog ->
+		    drivertable_insert_delete_process(1);
+		disablelog ->
+		    drivertable_insert_delete_process(0);
+		{chkinsdriverinfo, {DriverID, LicNo, CertCode, VDRAuthCode}} ->		% Check and insert
 			if
 				DriverID == undefined ->
-					log:loginfo("Cannot get driver item by driver undefined id");
+					log:loginfo("Cannot get driver item by driver undefined id", DispLog);
 				true ->
-					DriverInfos = ets:match(drivertable, {'$1',
-														  DriverID, '_', '_', '_'}),
+					DriverInfos = ets:match(drivertable, {'$1', DriverID, '_', '_', '_'}),
 					DriverInfosCount = length(DriverInfos),
 					if
 						DriverInfosCount == 0 orelse DriverInfosCount == 1 ->
 							DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
-							log:loginfo("Insert new driver item : ~p", [DriverInfoItem]),
+							log:loginfo("Insert new driver item : ~p", [DriverInfoItem], DispLog),
 							ets:insert(drivertable, DriverInfoItem);
 						true ->
 							ets:delete(drivertable, DriverID),
 							DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
-							log:loginfo("Get ~p driver item by driver id ~p and re-create a new driver item : ~p", [DriverInfosCount, DriverID, DriverInfoItem]),
+							log:loginfo("Get ~p driver item by driver id ~p and re-create a new driver item : ~p", [DriverInfosCount, DriverID, DriverInfoItem], DispLog),
 							ets:insert(drivertable, DriverInfoItem)
 					end
 			end,
-			drivertable_insert_delete_process();
-		{_Pid, offwork, CertCode} ->
-		    DriverInfos = ets:match(drivertable, {'_',
-												  '$1', '$2', CertCode, '_'}),
+			drivertable_insert_delete_process(DispLog);
+		{offwork, CertCode} ->
+		    DriverInfos = ets:match(drivertable, {'_', '$1', '$2', CertCode, '_'}),
     		DriverInfosCount = length(DriverInfos),
 			if
 				DriverInfosCount == 1 ->
@@ -484,12 +454,11 @@ drivertable_insert_delete_process() ->
 					DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode},
 					ets:insert(drivertable, DriverInfoItem);
 				true ->
-					log:loginfo("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode])
+					log:loginfo("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode], DispLog)
 			end,					
-			drivertable_insert_delete_process();
+			drivertable_insert_delete_process(DispLog);
 		{Pid, checkcc, {CertCode, VDRAuthCode}} ->		% CertCode must be binary
-		    DriverInfos = ets:match(drivertable, {'_',
-												  '$1', '$2', CertCode, '_'}),
+		    DriverInfos = ets:match(drivertable, {'_', '$1', '$2', CertCode, '_'}),
     		DriverInfosCount = length(DriverInfos),
 			if
 				DriverInfosCount == 1 ->
@@ -499,13 +468,12 @@ drivertable_insert_delete_process() ->
 					ets:insert(drivertable, DriverInfoItem),
 					Pid ! {Pid, {DriverInfosCount, DriverID}};
 				true ->
-					log:loginfo("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode]),
+					log:loginfo("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode], DispLog),
 					Pid ! {Pid, {DriverInfosCount, undefined}}
 			end,
-			drivertable_insert_delete_process();
+			drivertable_insert_delete_process(DispLog);
 		{Pid, getccbyvdr, VDRAuthCode} ->
-		    DriverInfos = ets:match(drivertable, {'_',
-												  '_', '_', '$1', VDRAuthCode}),
+		    DriverInfos = ets:match(drivertable, {'_', '_', '_', '$1', VDRAuthCode}),
     		DriverInfosCount = length(DriverInfos),
 			if
 				DriverInfosCount == 1 ->
@@ -517,26 +485,31 @@ drivertable_insert_delete_process() ->
 							Pid ! {Pid, CertCodeBin}
 					end;
 				true ->
-					log:loginfo("Get ~p certificate code by vdr_auth_code ~p", [DriverInfosCount, VDRAuthCode]),
+					log:loginfo("Get ~p certificate code by vdr_auth_code ~p", [DriverInfosCount, VDRAuthCode], DispLog),
 					Pid ! {Pid, <<"">>}
 			end,
-			drivertable_insert_delete_process();
+			drivertable_insert_delete_process(DispLog);
 		{Pid, count} ->
 			Count = ets:info(drivertable,size),
 			Pid ! {Pid, Count},
-			drivertable_insert_delete_process();
+			drivertable_insert_delete_process(DispLog);
 		_ ->
-			log:loginfo("Driver table insert/delete process receive unknown msg."),
-			drivertable_insert_delete_process()
+			log:loginfo("Driver table insert/delete process receive unknown msg.", DispLog),
+			drivertable_insert_delete_process(DispLog)
 	end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameters :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 lastpostable_insert_delete_process() ->
 	receive
 		stop ->
 			log:loginfo("Last pos table insert/delete process stops.");
 		{Pid, get, VID} ->
-		    Infos = ets:match(lastpostable, {'_', 
-											VID, '$1', '$2'}),
+		    Infos = ets:match(lastpostable, {'_', VID, '$1', '$2'}),
 			InfoCount = length(Infos),
 			if
 				InfoCount == 1 ->	
@@ -548,8 +521,7 @@ lastpostable_insert_delete_process() ->
 			lastpostable_insert_delete_process();
 		{_Pid, set, Info} ->
 			[VID, Lon, Lat] = Info,
-		    Infos = ets:match(lastpostable, {'$1', 
-											VID, '_', '_'}),
+		    Infos = ets:match(lastpostable, {'$1', VID, '_', '_'}),
 			InfoCount = length(Infos),
 			if
 				InfoCount == 0 ->	
@@ -568,43 +540,13 @@ lastpostable_insert_delete_process() ->
 			lastpostable_insert_delete_process()
 	end.
 
-%vdr_resp_process() ->
-%	receive
-%		stop ->
-%			log:loginfo("VDR response process stops.");
-%		{Pid, Socket, Msg} ->
-%			vdr_resp_process(),
-%			%log:loginfo("Msg from VDR ~p to VDRPid ~p : ~p", [Pid, self(), Msg]),
-%			try gen_tcp:send(Socket, Msg)
-%		    catch
-%		        _:Ex ->
-%		            log:loginfo("Exception when gen_tcps:send ~p : ~p", [Msg, Ex])
-%		    end,
-%			Pid ! {Pid, ok};
-%		{_Pid, Socket, Msg, noresp} ->
-%			vdr_resp_process(),
-%			%log:loginfo("Msg from VDR ~p to VDRPid ~p : ~p", [Pid, self(), Msg]),
-%			try gen_tcp:send(Socket, Msg)
-%		    catch
-%		        _:Ex ->
-%		            log:loginfo("Exception when gen_tcps:send ~p : ~p", [Msg, Ex])
-%		    end;
-%		Unknown ->
-%			log:loginfo("Msg from VDR to VDRPid unknwon : ~p", [Unknown]),
-%			vdr_resp_process()
-%	end.
-
-%%%
-%%%
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameters :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 stop(_State) ->
-    [{dbpid, DBPid}] = ets:lookup(msgservertable, dbpid),
-    case DBPid of
-        undefined ->
-            ok;
-        _ ->
-            DBPid ! stop
-    end,
     [{vdrtablepid, VdrTablePid}] = ets:lookup(msgservertable, vdrtablepid),
     case VdrTablePid of
         undefined ->
@@ -612,54 +554,12 @@ stop(_State) ->
         _ ->
             VdrTablePid ! stop
     end,
-    [{dbmaintainpid, DBMaintainPid}] = ets:lookup(msgservertable, dbmaintainpid),
-    case DBMaintainPid of
+    [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
+    case LinkInfoPid of
         undefined ->
             ok;
         _ ->
-            DBMaintainPid ! stop
-    end,
-    [{dboperationpid, DBOperationPid}] = ets:lookup(msgservertable, dboperationpid),
-    case DBOperationPid of
-        undefined ->
-            ok;
-        _ ->
-            DBOperationPid ! stop
-    end,
-    [{mysqlactivepid, MysqlActivePid}] = ets:lookup(msgservertable, mysqlactivepid),
-    case MysqlActivePid of
-        undefined ->
-            ok;
-        _ ->
-            MysqlActivePid ! stop
-    end,
-    [{vdrresppid, VdrRespPid}] = ets:lookup(msgservertable, vdrresppid),
-    case VdrRespPid of
-        undefined ->
-            ok;
-        _ ->
-            VdrRespPid ! stop
-    end,
-    [{wspid, WSPid}] = ets:lookup(msgservertable, wspid),
-    case WSPid of
-        undefined ->
-            ok;
-        _ ->
-            WSPid ! stop
-    end,
-    [{linkpid, LinkPid}] = ets:lookup(msgservertable, linkpid),
-    case LinkPid of
-        undefined ->
-            ok;
-        _ ->
-            LinkPid ! stop
-    end,
-    [{dbtablepid, DBTablePid}] = ets:lookup(msgservertable, dbtablepid),
-    case DBTablePid of
-        undefined ->
-            ok;
-        _ ->
-            DBTablePid ! stop
+            LinkInfoPid ! stop
     end,
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
     case CCPid of
@@ -701,7 +601,7 @@ stop(_State) ->
         undefined ->
             ok;
         _ ->
-            VDRLogPid ! stop
+            VDROnlinePid ! stop
     end,
     error_logger:info_msg("Message server stops.").
 
@@ -719,61 +619,43 @@ code_convertor_process(DispLog) ->
     receive
         {Pid, create} ->			
             code_convertor:init_code_table(),
-            log:loginfo("Code table is initialized."),
+            log:loginfo("Code table is initialized.", DispLog),
             Pid ! created,
             code_convertor_process(DispLog);
         stop ->
             ok;
-        displaylog ->
+        enablelog ->
             code_convertor_process(1);
-        hidelog ->
+        disablelog ->
             code_convertor_process(0);
         {Pid, gbk2utf8, Source} ->
             try
                 Destination = code_convertor:to_utf8(Source),
-				if
-					DispLog == 1 ->
-						log:loginfo("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination])
-				end,
+    			log:loginfo("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination], DispLog),
                 Pid ! Destination
             catch
                 _:Reason ->
-					if
-						DispLog == 1 ->
-							log:loginfo("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason])
-					end,
+    				log:loginfo("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason], DispLog),
                     Pid ! Source
             end,
             code_convertor_process(DispLog);
         {Pid, utf82gbk, Source} ->
             try
                 Destination = code_convertor:to_gbk(Source),
-				if
-					DispLog == 1 ->
-						log:loginfo("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination])
-				end,
+				log:loginfo("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination], DispLog),
                 Pid ! Destination
             catch
                 _:Reason ->
-					if
-						DispLog == 1 ->
-							log:loginfo("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason])
-					end,
+					log:loginfo("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason], DispLog),
                     Pid ! Source
             end,
             code_convertor_process(DispLog);
 		{Pid, Msg} ->
-			if
-				DispLog == 1 ->
-					log:loginfo("code_convertor_process : unknown request : ~p", [Msg])
-			end,
+			log:loginfo("code_convertor_process : unknown request : ~p", [Msg], DispLog),
 			Pid ! Msg,
 			code_convertor_process(DispLog);
 		_ ->
-			if
-				DispLog == 1 ->
-					log:loginfo("code_convertor_process : unknown message")
-			end,
+			log:loginfo("code_convertor_process : unknown message", DispLog),
 			code_convertor_process(DispLog)
     end.
 
@@ -833,118 +715,4 @@ receive_redis_init_msg(UseRedis, Count) ->
         true ->
             ok
     end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-db_table_deamon() ->
-    Today = erlang:localtime(),%today(),
-    Tomorrow = add(Today, 1),
-    {{Year, Month, Day}, _} = Today,
-    {{Year1, Month1, Day1}, _} = Tomorrow,
-    YearS = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Year)),
-    MonthS = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Month)),
-    DayS = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Day)),
-    Year1S = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Year1)),
-    Month1S = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Month1)),
-    Day1S = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Day1)),
-    Bin = list_to_binary([common:integer_to_2byte_binary(YearS),
-              common:integer_to_2byte_binary(MonthS),
-              common:integer_to_2byte_binary(DayS)]),
-    Bin1 = list_to_binary([common:integer_to_2byte_binary(Year1S),
-               common:integer_to_2byte_binary(Month1S),
-               common:integer_to_2byte_binary(Day1S)]),
-    [{dbpid, DBPid}] = ets:lookup(msgservertable, dbpid),
-    [{dbname, DBName}] = ets:lookup(msgservertable, dbname),
-	DBNameBin = list_to_binary(DBName),
-    case DBPid of
-        undefined ->
-            ok;
-        _ ->
-            Pid = self(),
-            error_logger:info_msg("Check table ~p.vehicle_position_~p", [DBName, binary_to_list(Bin)]),
-            DBPid ! {Pid, conn, list_to_binary([<<"CREATE TABLE IF NOT EXISTS ">>,
-												DBNameBin,
-												<<".vehicle_position_">>,
-												Bin,
-												<<" LIKE vehicle_position">>])},
-            receive
-                {Pid, Result1} ->
-                    Result1
-            end,
-            error_logger:info_msg("Check table ~p.vehicle_position_~p", [DBName, binary_to_list(Bin1)]),
-            DBPid ! {Pid, conn, list_to_binary([<<"CREATE TABLE IF NOT EXISTS ">>,
-												DBNameBin,
-												<<".vehicle_position_">>,
-												Bin1,
-												<<" LIKE vehicle_position">>])},
-            receive
-                {Pid, Result2} ->
-                    Result2
-            end
-    end,
-	receive
-		stop ->
-			ok;
-		_ ->
-			db_table_deamon()
-	after 23*60*60*1000 ->
-			db_table_deamon()
-	end.			
-
-%today() -> erlang:localtime().
-%tomorrow() -> add(today(), 1).
-
-add(Date, second) ->
-    add(Date, 1, seconds);
-add(Date, minute) ->
-    add(Date, 1, minutes);
-add(Date, hour) ->
-    add(Date, 1, hours);
-add(Date, day) ->
-    add(Date, 1);
-add(Date, week) ->
-    add(Date, 1, weeks);
-add(Date, month) ->
-    add(Date, 1, months);
-add(Date, year) ->
-    add(Date, 1, years);
-add(Date, N)  ->
-    add(Date, N, days).
-
-add(DateTime, N, seconds) ->
-    T1 = calendar:datetime_to_gregorian_seconds(DateTime),
-    T2 = T1 + N,
-    calendar:gregorian_seconds_to_datetime(T2);
-add(DateTime, N, minutes) ->
-    add(DateTime, 60*N, seconds);
-add(DateTime, N, hours) ->
-    add(DateTime, 60*N, minutes);
-add(DateTime, N, days) ->
-    add(DateTime, 24*N, hours);
-add(DateTime, N, weeks) ->
-    add(DateTime, 7*N, days);
-% Adding months is a bit tricky.
-add({{YYYY, MM, DD}=Date, Time}, 0, months) ->
-    case calendar:valid_date(Date) of
-	true  -> {Date, Time};
-	false -> add({{YYYY, MM, DD-1}, Time}, 0, months) % Oops, too many days in this month,
-                                                          % Remove a day and try again.
-    end;
-add({{YYYY, MM, DD}, Time}, N, months) when N > 0 andalso MM < 12 ->
-    add({{YYYY, MM+1, DD}, Time}, N-1, months);
-add({{YYYY, MM, DD}, Time}, N, months) when N > 0 andalso MM =:= 12 ->
-    add({{YYYY+1, 1, DD}, Time}, N-1, months); 
-add({{YYYY, MM, DD}, Time}, N, months) when N < 0 andalso MM > 1 ->
-    add({{YYYY, MM-1, DD}, Time}, N+1, months);
-add({{YYYY, MM, DD}, Time}, N, months) when N < 0 andalso MM =:= 1 ->
-    add({{YYYY-1, 12, DD}, Time}, N+1, months);
-add(Date, N, years) ->
-    add(Date, 12*N, months).
-     
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% File END.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
