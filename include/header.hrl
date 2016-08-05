@@ -2,14 +2,14 @@
 % header.hrl
 %
 
--define(SUP_MAXR, 3).
--define(SUP_MAXT, 1).
+-define(SUP_MAX_RESTART,    3).
+-define(SUP_MAX_TIME,       1).
 
--define(DEF_PORT_MYSQL,	3306).
--define(DEF_PORT_VDR,	6000).
--define(DEF_PORT_MON, 	6001).
+-define(DEF_PORT_MYSQL,    3306).
+-define(DEF_PORT_VDR,    6000).
+-define(DEF_PORT_MON,     6001).
 
--define(DEF_MYSQL_DB_NAME,	"gps_database").
+-define(DEF_MYSQL_DB_NAME,    "gps_database").
 -define(DEF_MYSQL_USERNAME, "optimus").
 -define(DEF_MYSQL_PASSWORD, "opt123450").
 -define(DEF_HTTPGPS_SERVER, "58.246.201.138:8081").
@@ -17,8 +17,8 @@
 -define(DEF_LOG_PATH, "/tmp").
 
 
--define(CONN_STAT_TEST,         0).	%
--define(CONN_STAT_CONN,         1).	% Count for VDR connections
+-define(CONN_STAT_TEST,         0).    %
+-define(CONN_STAT_CONN,         1).    % Count for VDR connections
 -define(CONN_STAT_DISC_CHAR,    2). % Disconnection count due to invalid characters in the message from VDR to the gateway
 -define(CONN_STAT_DISC_REG,     3). % Disconnection count due to unregiestered VDR
 -define(CONN_STAT_DISC_AUTH,    4). % Disconnection count due to error information from anthorized VDR
@@ -148,13 +148,13 @@
                     driverid=undefined,         % DB driver ID, only valid in DB table
                     driverlicno=undefined,      % Actual driver license number
                     alarm=0,
-					alarmlist=[],
-					state=0,
-					statelist=[],
+                    alarmlist=[],
+                    state=0,
+                    statelist=[],
                     lastlat=0.0,
                     lastlon=0.0,
                     pid=undefined,
-                    dboperid=undefined,			% db operation process
+                    dboperid=undefined,            % db operation process
                     addr=undefined, 
                     acttime=undefined, 
                     timeout=undefined,
@@ -169,31 +169,31 @@
                     msgws2vdr=[],            % [{MsgID, WSFlowIdx}, ...] only one item for one MsgID
                     ccpid=undefined,
                     msgpackages={-1, []},
-					tel=0,
-					linkpid=undefined,
-					vdrtablepid=undefined,
-					drivertablepid=undefined,
-					lastpostablepid=undefined,
-					drivercertcode=undefined,
-					httpgpspid=undefined,
-					encrypt=false,
-					vdrlogpid=undefined,
-					storedmsg4save=[],
-					vdronlinepid=undefined
+                    tel=0,
+                    linkpid=undefined,
+                    vdrtablepid=undefined,
+                    drivertablepid=undefined,
+                    lastpostablepid=undefined,
+                    drivercertcode=undefined,
+                    httpgpspid=undefined,
+                    encrypt=false,
+                    vdrlogpid=undefined,
+                    storedmsg4save=[],
+                    vdronlinepid=undefined
                  }).
 
--record(vdrdbitem, {  authencode=undefined,		% VDRAuthenCode
-					  vdrid=undefined, 			% VDRID
-					  vdrserialno=undefined,	% VDRSerialNo
-					  vehiclecode=undefined, 	% VehicleCode
-                      vehicleid=undefined,		% VehicleID
-					  driverid=undefined		% DriverID
+-record(vdrdbitem, {  authencode=undefined,        % VDRAuthenCode
+                      vdrid=undefined,             % VDRID
+                      vdrserialno=undefined,    % VDRSerialNo
+                      vehiclecode=undefined,     % VehicleCode
+                      vehicleid=undefined,        % VehicleID
+                      driverid=undefined        % DriverID
                  }).
 
--record(alarmitem, {  vehicleid=undefined,		% VehicleID
-					  type=undefined, 			% Type
-					  time=undefined%,			% Time
-					  %sn=undefined				% msg flow index
+-record(alarmitem, {  vehicleid=undefined,        % VehicleID
+                      type=undefined,             % Type
+                      time=undefined%,            % Time
+                      %sn=undefined                % msg flow index
                  }).
 
 %%%
@@ -211,11 +211,11 @@
                     pid=undefined, 
                     addr=undefined, 
                     timeout=undefined,
-					dbpid=undefined,
-					wspid=undefined,
-					driverpid=undefined,
-					vdrlogpid=undefined,
-					vdronlinepid=undefined
+                    dbpid=undefined,
+                    wspid=undefined,
+                    driverpid=undefined,
+                    vdrlogpid=undefined,
+                    vdronlinepid=undefined
                  }).
 
 -record(mpitem, {  socket=undefined, 
@@ -245,25 +245,26 @@
                     wsacckey=undeifned
                  }).
 
--record(driverinfo, {	driverid=undefined,
-						licno=undefined,
-						certcode=undefined,
-						vdrauthcode=undefined
-					 }).
+-record(driverinfo, {    driverid=undefined,
+                        licno=undefined,
+                        certcode=undefined,
+                        vdrauthcode=undefined
+                     }).
 
--record(lastposinfo, {	vehicleid=undefined,
-						longitude=0.0,
-						latitude=0.0
-					 }).
+-record(lastposinfo, {    vehicleid=undefined,
+                        longitude=0.0,
+                        latitude=0.0
+                     }).
 
-%%%
-%%% lsock       : Listening socket
-%%% acceptor    : Asynchronous acceptor's internal reference
-%%%
--record(serverstate, {	lsock = undefined, 
-						acceptor = undefined, 
-						linkpid = undefined
-  					}).
+%
+% lsock           : Listening socket
+% acceptor        : Asynchronous acceptor's internal reference
+% linkinfopid    :
+%
+-record(serverstate, { lsock = undefined, 
+                       acceptor = undefined, 
+                       linkinfopid = undefined
+                     }).
 
 %% JSON - RFC 4627 - for Erlang
 %%---------------------------------------------------------------------------

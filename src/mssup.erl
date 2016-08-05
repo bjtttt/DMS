@@ -137,7 +137,8 @@ start_link() ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([]) ->
-	log:loginfo("mssup:init([])"),
+    log:loginfo("mssup:init([])"),
+    [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
     % Id        : used to identify the child specification internally by the supervisor.
     %             Notice that this identifier on occations has been called "name". 
     %             As far as possible, the terms "identifier" or "id" are now used but to keep backward compatibility, 
@@ -170,52 +171,53 @@ init([]) ->
     %             The modules key is optional. If it is not specified, it defaults to [M], where M comes from the child's start {M,F,A}.
     % Listen VDR connection
     VDRServer = {
-				 vdr_server,                                    % Id       = internal id
-				 {vdr_server, start_link, []},    	            % StartFun = {M, F, A}
-				 permanent,                              		% Restart  = permanent | transient | temporary
-				 brutal_kill,                               	% Shutdown = brutal_kill | int() >= 0 | infinity
-				 worker,                                    	% Type     = worker | supervisor
-				 [vdr_server]                            		% Modules  = [Module] | dynamic
-				},
+                 vdr_server,                                    % Id       = internal id
+                 {vdr_server, start_link, [LinkInfoPid]},                    % StartFun = {M, F, A}
+                 permanent,                                      % Restart  = permanent | transient | temporary
+                 brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
+                 worker,                                        % Type     = worker | supervisor
+                 [vdr_server]                                    % Modules  = [Module] | dynamic
+                },
     % Process VDR communication
     VDRHandler = {
-				  sup_vdr_handler,               				% Id       = internal id
-				  {supervisor, start_link, [{local, sup_vdr_handler}, ?MODULE, [vdr_handler]]},
-				  permanent, 									% Restart  = permanent | transient | temporary
-				  ?TIME_TERMINATE_VDR, 							% Shutdown = brutal_kill | int() >= 0 | infinity
-				  supervisor, 				    				% Type     = worker | supervisor
-				  []											% Modules  = [Module] | dynamic
-				 },
+                  sup_vdr_handler,                               % Id       = internal id
+                  {supervisor, start_link, [{local, sup_vdr_handler}, ?MODULE, [vdr_handler]]},
+                  permanent,                                     % Restart  = permanent | transient | temporary
+                  ?TIME_TERMINATE_VDR,                             % Shutdown = brutal_kill | int() >= 0 | infinity
+                  supervisor,                                     % Type     = worker | supervisor
+                  []                                            % Modules  = [Module] | dynamic
+                 },
     % Listen Monitor connection
     MonServer = {
-                 mon_server,                             		% Id       = internal id
+                 mon_server,                                     % Id       = internal id
                  {mon_server, start_link, []},                  % StartFun = {M, F, A}
-                 permanent,                                 	% Restart  = permanent | transient | temporary
-                 brutal_kill,                               	% Shutdown = brutal_kill | int() >= 0 | infinity
-                 worker,                                    	% Type     = worker | supervisor
-                 [mon_server]                            		% Modules  = [Module] | dynamic
+                 permanent,                                     % Restart  = permanent | transient | temporary
+                 brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
+                 worker,                                        % Type     = worker | supervisor
+                 [mon_server]                                    % Modules  = [Module] | dynamic
                 },
     % Process Monitor communication
     MonHandler = {
-                  sup_mon_handler,               				% Id       = internal id
+                  sup_mon_handler,                               % Id       = internal id
                   {supervisor, start_link, [{local, sup_mon_handler}, ?MODULE, [mon_handler]]},
-                  permanent,                        			% Restart  = permanent | transient | temporary
-                  ?TIME_TERMINATE_MON,              			% Shutdown = brutal_kill | int() >= 0 | infinity
-                  supervisor,                       			% Type     = worker | supervisor
-                  []                                			% Modules  = [Module] | dynamic
+                  permanent,                                    % Restart  = permanent | transient | temporary
+                  ?TIME_TERMINATE_MON,                          % Shutdown = brutal_kill | int() >= 0 | infinity
+                  supervisor,                                   % Type     = worker | supervisor
+                  []                                            % Modules  = [Module] | dynamic
                  },
-	Children = [VDRServer, VDRHandler, MonServer, MonHandler],
-    % one_for_one - If one child process terminates and is to be restarted, only that child process is affected. This is the default restart strategy.
-	% Assuming the values MaxR for intensity and MaxT for period, then, if more than MaxR restarts occur within MaxT seconds, 
-	% the supervisor terminates all child processes and then itself. intensity defaults to 1 and period defaults to 5.
-    RestartStrategy = {one_for_one, ?SUP_MAXR, ?SUP_MAXT},
+    Children = [VDRServer, VDRHandler, MonServer, MonHandler],
+    % one_for_one - If one child process terminates and is to be restarted, only that child process is affected.
+    %   If a child process terminates, only that process is restarted. This is the default restart strategy.
+    % Assuming the values MaxR for intensity and MaxT for period, then, if more than MaxR restarts occur within MaxT seconds, 
+    % the supervisor terminates all child processes and then itself. intensity defaults to 1 and period defaults to 5.
+    RestartStrategy = {one_for_one, ?SUP_MAX_RESTART, ?SUP_MAX_TIME},
     {ok, {RestartStrategy, Children}};
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([Module]) ->
-	log:loginfo("mssup:init([Module]) : ~p", [Module]),
+    log:loginfo("mssup:init([Module]) : ~p", [Module]),
     Instance = {
              	undefined,                 % Id       = internal id
                 {Module, start_link, []},  % StartFun = {M, F, A}
@@ -225,6 +227,8 @@ init([Module]) ->
                 []                         % Modules  = [Module] | dynamic
                },
     Children = [Instance],
-    RestartStrategy = {simple_one_for_one, 0, 1},
+    % A supervisor with restart strategy simple_one_for_one is a simplified one_for_one supervisor, where all child processes are dynamically added instances of the same process.
+    % Details : http://erlang.org/doc/design_principles/sup_princ.html#simple
+    RestartStrategy = {simple_one_for_one, ?SUP_MAX_RESTART, ?SUP_MAX_TIME},
     {ok, {RestartStrategy, Children}}.
 
