@@ -138,10 +138,40 @@ start_link() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([]) ->
 	log:loginfo("mssup:init([])"),
+    % Id        : used to identify the child specification internally by the supervisor.
+    %             Notice that this identifier on occations has been called "name". 
+    %             As far as possible, the terms "identifier" or "id" are now used but to keep backward compatibility, 
+    %               some occurences of "name" can still be found, for example in error messages.
+    % StartFun  : defines the function call used to start the child process. It must be a module-function-arguments tuple {M,F,A} used as apply(M,F,A).
+    %             The start function must create and link to the child process, and must return {ok,Child} or {ok,Child,Info}, 
+    %               where Child is the pid of the child process and Info any term that is ignored by the supervisor.
+    %             The start function can also return ignore if the child process for some reason cannot be started, 
+    %               in which case the child specification is kept by the supervisor (unless it is a temporary child) but the non-existing child process is ignored.
+    %             If something goes wrong, the function can also return an error tuple {error,Error}.
+    %             Notice that the start_link functions of the different behavior modules fulfill the above requirements.
+    % Restart   : defines when a terminated child process must be restarted. A permanent child process is always restarted. 
+    %             A temporary child process is never restarted (even when the supervisor's restart strategy is rest_for_one or one_for_all and a sibling's death causes the temporary process to be terminated).
+    %             A transient child process is restarted only if it terminates abnormally, that is, with another exit reason than normal, shutdown, or {shutdown,Term}.
+    %             If it is not specified, it defaults to permanent.
+    % Shutdown  : defines how a child process must be terminated. 
+    %               brutal_kill means that the child process is unconditionally terminated using exit(Child,kill). 
+    %               An integer time-out value means that the supervisor tells the child process to terminate by calling exit(Child,shutdown) and then wait for an exit signal with reason shutdown back from the child process. 
+    %               If no exit signal is received within the specified number of milliseconds, the child process is unconditionally terminated using exit(Child,kill).
+    %             If the child process is another supervisor, the shutdown time is to be set to infinity to give the subtree ample time to shut down. It is also allowed to set it to infinity, if the child process is a worker.
+    %             Be careful when setting the shutdown time to infinity when the child process is a worker. Because, in this situation, 
+    %               the termination of the supervision tree depends on the child process, it must be implemented in a safe way and its cleanup procedure must always return.
+    %             Notice that all child processes implemented using the standard OTP behavior modules automatically adhere to the shutdown protocol.
+    %             The shutdown key is optional. If it is not specified, it defaults to 5000 if the child is of type worker and it defaults to infinity if the child is of type supervisor.
+    % Type      : specifies if the child process is a supervisor or a worker.
+    %             The type key is optional. If it is not specified, it defaults to worker.
+    % Modules   : is used by the release handler during code replacement to determine which processes are using a certain module. 
+    %               As a rule of thumb, if the child process is a supervisor, gen_server, gen_statem, or gen_fsm, this is to be a list with one element [Module], 
+    %               where Module is the callback module. If the child process is an event manager (gen_event) with a dynamic set of callback modules, value dynamic must be used.
+    %             The modules key is optional. If it is not specified, it defaults to [M], where M comes from the child's start {M,F,A}.
     % Listen VDR connection
     VDRServer = {
-				 vdr_server,                            		% Id       = internal id
-				 {vdr_server, start_link, [?DEF_PORT_VDR]},    	% StartFun = {M, F, A}
+				 vdr_server,                                    % Id       = internal id
+				 {vdr_server, start_link, []},    	            % StartFun = {M, F, A}
 				 permanent,                              		% Restart  = permanent | transient | temporary
 				 brutal_kill,                               	% Shutdown = brutal_kill | int() >= 0 | infinity
 				 worker,                                    	% Type     = worker | supervisor
@@ -159,7 +189,7 @@ init([]) ->
     % Listen Monitor connection
     MonServer = {
                  mon_server,                             		% Id       = internal id
-                 {mon_server, start_link, [?DEF_PORT_MON]},   	% StartFun = {M, F, A}
+                 {mon_server, start_link, []},                  % StartFun = {M, F, A}
                  permanent,                                 	% Restart  = permanent | transient | temporary
                  brutal_kill,                               	% Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                    	% Type     = worker | supervisor
@@ -175,6 +205,7 @@ init([]) ->
                   []                                			% Modules  = [Module] | dynamic
                  },
 	Children = [VDRServer, VDRHandler, MonServer, MonHandler],
+    % one_for_one - If one child process terminates and is to be restarted, only that child process is affected. This is the default restart strategy.
 	% Assuming the values MaxR for intensity and MaxT for period, then, if more than MaxR restarts occur within MaxT seconds, 
 	% the supervisor terminates all child processes and then itself. intensity defaults to 1 and period defaults to 5.
     RestartStrategy = {one_for_one, ?SUP_MAXR, ?SUP_MAXT},
