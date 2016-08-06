@@ -1,6 +1,7 @@
 %
 % Need considering how management server sends message to VDR
 % https://erlangcentral.org/wiki/index.php?title=Building_a_Non-blocking_TCP_server_using_OTP_principles
+% http://blog.chinaunix.net/uid-429659-id-3540652.html
 %
 -module(vdr_server).
 
@@ -59,14 +60,14 @@ init([LinkInfoPid]) ->
             log:loginfo("vdr_server:init(LinkInfoPid : ~p) : gen_tcp:listen ok", [LinkInfoPid]),
 			case prim_inet:async_accept(LSock, -1) of
                 {ok, Ref} ->
-                    log:loginfo("vdr_server:init(LinkInfoPid : ~p) : prim_inet:async_accept ok", [LinkInfoPid]),
+                    log:loginfo("vdr_server:init(LinkInfoPid : ~p) : prim_inet:async_accept(LSock : ~p, -1) ok", [LinkInfoPid, LSock]),
                     {ok, #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=LinkInfoPid}};
                 Error ->
-                    common:logerr("vdr_server:init() : prim_inet:async_accept accept fails : ~p", [Error]),
+                    common:logerr("vdr_server:init(LinkInfoPid : ~p) : prim_inet:async_accept(LSock : ~p, -1) fails : ~p", [LinkInfoPid, LSock, Error]),
                     {stop, Error}
             end;
 		{error, Reason} ->	        
-            common:loginfo("vdr_server:init() : gen_tcp:listen fails : ~p", [Reason]),
+            common:loginfo("vdr_server:init(LinkInfoPid : ~p) : gen_tcp:listen fails : ~p", [LinkInfoPid, Reason]),
 			{stop, Reason}    
 	end. 
 
@@ -107,21 +108,18 @@ handle_cast(_Msg, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-handle_info({inet_async, LSock, Ref, {ok, CSock}}, #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=_LinkInfoPid}=State) ->
+handle_info({inet_async, LSock, Ref, {ok, CSock}},
+            #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=_LinkInfoPid}=State) ->
     try        
-		case common:set_sockopt(LSock, CSock, "vdr_server:handle_info(...)") of	        
+		case common:set_sockopt(LSock, CSock, "vdr_server:handle_info({inet_async...)") of	        
 			ok -> 
 				ok;	        
 			{error, Reason} -> 
-                common:loginfo("vdr_server:handle_info(...) : common:set_sockopt(...) fails : ~p", [Reason]),
-  				% Why use exit here?
-                % {stop, set_sockpt, Reason}
-                % Please consider it in the future
+                common:loginfo("vdr_server:handle_info({inet_async...) : common:set_sockopt(LSock : ~p, CSock : ~p, ...) fails : ~p", [LSock, CSock, Reason]),
                 exit({set_sockopt, Reason})       
 		end,
 		% New client connected
         % Spawn a new process using the simple_one_for_one supervisor.
-        % Why it is "the simple_one_for_one supervisor"?
         case common:safepeername(CSock) of
             {ok, {Addr, _Port}} ->
                 case mssup:start_child_vdr(CSock, Addr) of

@@ -240,20 +240,33 @@ removemsgfromlistbyflownum(FlowNum, Msg) ->
             end
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameter :
+%       LSock   : Listen socket
+%       CSock   : Client socket
+% Return :
+%       ok
+%       {error, Error}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 set_sockopt(LSock, CSock, Msg) ->    
     true = inet_db:register_socket(CSock, inet_tcp),    
     case prim_inet:getopts(LSock, [active, nodelay, keepalive, delay_send, priority, tos]) of       
         {ok, Opts} ->           
             case prim_inet:setopts(CSock, Opts) of              
-                ok -> 
+                ok ->
+                    %log:loginfo("prim_inet:setopts(CSock : ~p, Opts : ~p) ok.", [CSock, Opts]);
                     ok;             
                 Error -> 
-                    common:loginfo(string:concat(Msg, " prim_inet:setopts fails : ~p~n"), Error),    
-                    gen_tcp:close(CSock)
+                    log:loginfo(string:concat(Msg, " : prim_inet:setopts(CSock : ~p, Opts : ~p) fails : ~p"), [CSock, Opts, Error]),    
+                    gen_tcp:close(CSock),
+                    {error, Error}
             end;       
         Error ->           
-            common:loginfo(string:concat(Msg, " prim_inet:getopts fails : ~p~n"), Error),
-            gen_tcp:close(CSock)
+            common:loginfo(string:concat(Msg, " : prim_inet:setopts(CSock : ~p, Opts : ~p) fails : ~p"), [CSock, Opts, Error]),
+            gen_tcp:close(CSock),
+            {error, Error}
     end.
 
 %%%
