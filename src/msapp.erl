@@ -119,7 +119,7 @@ startserver(StartArgs) ->
                     LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
                     ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
                     
-                    CCPid = spawn(fun() -> code_convertor_process() end),
+                    CCPid = spawn(fun() -> ccprocessor:code_convertor_process() end),
                     ets:insert(msgservertable, {ccpid, CCPid}),
                                         
                     VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
@@ -590,55 +590,6 @@ stop(_State) ->
     end,
     log:loghint("Message server stops.").
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-%        Convert characters between UTF8 and GBK
-% Parameters :
-%   AppPid  :
-%   DispLog : 1         -> display log message
-%             others    -> doesn't display log message
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-code_convertor_process() ->
-    receive
-        {Pid, create} ->            
-            code_convertor:init_code_table(),
-            log:loghint("Code table is initialized."),
-            Pid ! created,
-            code_convertor_process();
-        stop ->
-            ok;
-        {Pid, gbk2utf8, Source} ->
-            try
-                Destination = code_convertor:to_utf8(Source),
-                log:loginfo("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination]),
-                Pid ! Destination
-            catch
-                _:Reason ->
-                    log:logerr("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason]),
-                    Pid ! Source
-            end,
-            code_convertor_process();
-        {Pid, utf82gbk, Source} ->
-            try
-                Destination = code_convertor:to_gbk(Source),
-                log:loginfo("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination]),
-                Pid ! Destination
-            catch
-                _:Reason ->
-                    log:logerr("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason]),
-                    Pid ! Source
-            end,
-            code_convertor_process();
-        {Pid, Msg} ->
-            log:loghint("code_convertor_process : unknown request : ~p", [Msg]),
-            Pid ! Msg,
-            code_convertor_process();
-        _ ->
-            log:loghint("code_convertor_process : unknown message"),
-            code_convertor_process()
-    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

@@ -23,10 +23,16 @@
 
 -include("../include/header.hrl").
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_link(CSock, Addr, LinkInfoPid) ->
     log:lognone("vdr_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
 	gen_server:start_link(?MODULE, [CSock, Addr, LinkInfoPid], []). 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([CSock, Addr, LinkInfoPid]) ->
     log:lognone("vdr_handler:init(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
@@ -51,96 +57,144 @@ init([CSock, Addr, LinkInfoPid]) ->
                      vdrlogpid=VDRLogPid, 
                      vdronlinepid=VDROnlinePid},
 	common:send_stat_err(State, ?CONN_STAT_CONN),
-    inet:setopts(CSock, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
+    set_sock_opts(CSock),
     {ok, State, ?VDR_MSG_TIMEOUT}.       
 
-%handle_call({fetch, PoolId, Msg}, _From, State) ->
-%    Resp = mysql:fetch(PoolId, Msg),
-%    {noreply, {ok, Resp}, State};
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameter :
+%       CSock   :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+set_sock_opts(CSock) ->
+    inet:setopts(CSock, [binary, {active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_call(_Request, _From, State) ->
     {noreply, ok, State}.
 
-%handle_cast({send, Socket, Msg}, State) ->
-%    gen_tcp:send(Socket, Msg),
-%    {noreply, State};
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_cast(_Msg, State) ->    
 	{noreply, State}. 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   Debug function. Save messages between the VDR and the gateway to disk.
+% Parameter :
+%       State   :
+%       FromVDR :
+%       Msg     :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 save_msg_4_vdr(State, FromVDR, Msg) ->
-	VDRID = State#vdritem.id,
+    VDRID = State#vdritem.id,
 	StoredMsg = State#vdritem.storedmsg4save,
 	VDRLogPid = State#vdritem.vdrlogpid,
-	Pid = State#vdritem.pid,
 	if
 		VDRID == undefined ->
 			{Year,Month,Day} = erlang:date(),
 			{Hour,Min,Second} = erlang:time(),
 			NewMsg = [{FromVDR, Msg, Year, Month, Day, Hour, Min, Second}],
 			NewStoredMsg = lists:merge([StoredMsg, NewMsg]),
-			%common:loginfo("Stored Data : ~p", [StoredMsg]),
-			%common:loginfo("Storing Data : ~p", [Msg]),
+            log:lognone("VDR (id ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p) storing Data :~n~p", 
+                        [VDRID,
+                         State#vdritem.serialno,
+                         State#vdritem.auth,
+                         State#vdritem.vehicleid,
+                         State#vdritem.vehiclecode,
+                         NewStoredMsg]),
 			State#vdritem{storedmsg4save=NewStoredMsg};
 		true ->
-			%common:loginfo("Stored Data : ~p", [StoredMsg]),
-			%if
-			%	FromVDR == true ->
-			save_stored_msg_4_vdr(Pid, VDRID, StoredMsg, VDRLogPid),%;
-			%	true ->
-			%		ok
-			%end,
+            if
+                StoredMsg =/= [] ->
+                    log:lognone("VDR (id ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p) will send the stored data :~n~p", 
+                                [VDRID,                                                                                                               
+                                 State#vdritem.serialno,                                                                                                                     
+                                 State#vdritem.auth,
+                                 State#vdritem.vehicleid,
+                                 State#vdritem.vehiclecode,
+                                 StoredMsg]),
+                    save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid);
+                true ->
+                    ok
+            end,
 			{Year,Month,Day} = erlang:date(),
 			{Hour,Min,Second} = erlang:time(),
 			DateTime = {Year, Month, Day, Hour, Min, Second},
-			VDRLogPid ! {Pid, save, VDRID, FromVDR, Msg, DateTime},
+			VDRLogPid ! {save, VDRID, FromVDR, Msg, DateTime},
 			State#vdritem{storedmsg4save=[]}
 	end.
 
-save_stored_msg_4_vdr(Pid, VDRID, StoredMsg, VDRLogPid) when VDRLogPid =/= undefined,
-												 is_list(StoredMsg),
-												 length(StoredMsg) > 0 ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   Send messages to the message saving process.
+% Parameter :
+%       Pid, 
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid) when VDRLogPid =/= undefined,
+                                                        is_list(StoredMsg),
+                                                        length(StoredMsg) > 0 ->
 	[H|T] = StoredMsg,
 	{FromVDR, MsgBin, Year, Month, Day, Hour, Min, Second} = H,
 	DateTime = {Year, Month, Day, Hour, Min, Second},
-	VDRLogPid ! {Pid, save, VDRID, FromVDR, MsgBin, DateTime},
-	save_stored_msg_4_vdr(Pid, VDRID, T, VDRLogPid);
-save_stored_msg_4_vdr(_Pid, _VDRID, _StoredMsg, _VDRLogPid) ->
+	VDRLogPid ! {save, VDRID, FromVDR, MsgBin, DateTime},
+	save_stored_msg_4_vdr(VDRID, T, VDRLogPid);
+save_stored_msg_4_vdr(_VDRID, _StoredMsg, _VDRLogPid) ->
 	ok.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 save_online_msg(VID, State) ->
-	Pid = State#vdritem.pid,
 	VDROnlinePid = State#vdritem.vdronlinepid,
 	if
 		VDROnlinePid =/= undefined ->
 			{Year,Month,Day} = erlang:date(),
 			{Hour,Min,Second} = erlang:time(),
-			VDROnlinePid ! {Pid, add, VID, {Year,Month,Day,Hour,Min,Second}};
+			VDROnlinePid ! {add, VID, {Year,Month,Day,Hour,Min,Second}};
 		true ->
-			ok
+            log:logerr("VDR (id ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p) has no VDR online process id.",
+                       [State#vdritem.id,
+                        State#vdritem.serialno,
+                        State#vdritem.auth,
+                        State#vdritem.vehicleid,
+                        State#vdritem.vehiclecode])
 	end.
 
-%%%
-%%%
-%%%
-handle_info({tcp, Socket, Data}, OriState) ->
-	LinkPid = OriState#vdritem.linkpid,
-	Pid = OriState#vdritem.pid,
-	LinkPid ! {Pid, vdrmsggot},
-	MidState = save_msg_4_vdr(OriState, true, Data),
-	%safe_save_msg_4_vdr(Data, OriState),
-	%common:loginfo("Driver ID when MSG : ~p", [OriState#vdritem.driverid]),
-    %common:loginfo("~p : Data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~n~p",
-	%			   [self(),
-	%				OriState#vdritem.addr, 
-	%				OriState#vdritem.id, 
-	%				OriState#vdritem.serialno, 
-	%				OriState#vdritem.auth, 
-	%				OriState#vdritem.vehicleid, 
-	%				OriState#vdritem.vehiclecode,
-	%				Data]),
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+handle_info({tcp, Socket, Data}, PrevState) ->
+	LinkInfoPid = PrevState#vdritem.linkpid,
+	Pid = PrevState#vdritem.pid,
+	LinkInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
+	MidState = save_msg_4_vdr(PrevState, true, Data),
+    common:lognone("~p : Data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p)~n~p",
+				   [self(),
+					MidState#vdritem.addr, 
+					MidState#vdritem.id, 
+					MidState#vdritem.serialno, 
+					MidState#vdritem.auth, 
+					MidState#vdritem.vehicleid, 
+                    MidState#vdritem.vehiclecode, 
+                    MidState#vdritem.driverid,
+					Data]),
     % Update active time for VDR
 	DateTime = {erlang:date(), erlang:time()},
     State = MidState#vdritem{acttime=DateTime},
-    %State = OriState#vdritem{acttime=DateTime, vehicleid=1},
     %DataDebug = <<126,1,2,0,2,1,86,121,16,51,112,0,14,81,82,113,126,126,1,2,0,2,1,86,121,16,51,112,123,14,81,82,144,126>>,
     %DataDebug = <<126,1,2,0,2,1,86,121,16,51,112,44,40,81,82,123,126>>,
     %DataDebug = <<126,2,0,0,46,1,86,121,16,51,112,0,2,0,0,0,0,0,0,0,17,0,0,0,0,0,0,0,0,0,0,0,0,0,0,19,3,36,25,18,68,1,4,0,0,0,0,2,2,0,0,3,2,0,0,4,2,0,0,59,126>>,
@@ -158,20 +212,23 @@ handle_info({tcp, Socket, Data}, OriState) ->
 	%DataDebug = <<126,02,00,00,64,01,50,97,51,66,17,00,05,00,00,64,00,00,12,00,03,01,102,244,156,06,197,41,112,00,30,26,134,00,76,19,18,09,24,35,40,01,04,00,00,00,146,02,02,00,00,03,02,01,234,37,04,00,00,00,00,42,02,00,00,43,04,00,00,00,00,48,01,00,49,01,00,32,126>>,
 	%DataDebug = <<126,7,2,0,48,1,56,16,89,23,38,0,82,1,18,1,39,5,34,0,0,6,185,220,192,237,212,177,50,51,52,53,54,55,56,57,48,53,48,53,53,51,52,53,54,55,56,57,8,183,162,214,164,187,250,185,185,0,20,1,1,34,126>>,
     %DataDebug = <<126,2,0,0,60,1,50,97,51,36,129,0,4,0,0,0,0,0,12,1,19,2,94,215,124,6,239,184,194,0,27,0,0,1,98,21,3,18,16,6,68,1,4,0,0,0,10,2,2,0,0,3,2,0,0,37,4,0,0,0,0,43,4,0,0,0,255,48,1,99,49,1,10,61,126,126,0,2,0,0,1,50,97,51,36,129,0,5,195,126,126,2,0,0,60,1,50,97,51,36,129,0,6,0,0,0,0,0,0,1,17,0,0,0,0,0,0,0,0,0,0,0,0,0,0,21,3,18,16,6,72,1,4,0,0,0,10,2,2,0,0,3,2,0,0,37,4,0,0,0,0,43,4,0,0,0,0,48,1,99,49,1,0,212,126>>,
-	Msgs = common:split_msg_to_single(Data, 16#7e),
-    %Msgs = common:split_msg_to_single(DataDebug, 16#7e),
+    %Msgs = msghelper:split_msg_to_single(DataDebug, 16#7e),
+	Msgs = msghelper:split_msg_to_single(Data, 16#7e),
     case Msgs of
         [] ->
-			common:send_stat_err(State, spliterr),
+			common:send_stat_err(State, ?CONN_STAT_SPLIT_ERR),
             ErrCount = State#vdritem.errorcount + 1,
-            common:loginfo("VDR (~p) data empty : continous error count is ~p (max is 3)", [State#vdritem.addr, ErrCount]),
+            common:loginfo("VDR (~p) data empty : continous error count is ~p (max is ~p)", 
+                           [State#vdritem.addr,
+                            ErrCount,
+                            ?MAX_VDR_ERR_COUNT]),
             if
                 ErrCount >= ?MAX_VDR_ERR_COUNT ->
 					common:send_stat_err(State, errdisc),
 					common:send_stat_err(State, gwstop),
                     {stop, vdrerror, State#vdritem{errorcount=ErrCount}};
                 true ->
-                    inet:setopts(Socket, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
+                    set_sock_opts(Socket),
                     {noreply, State#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
             end;    
         _ ->
@@ -185,7 +242,7 @@ handle_info({tcp, Socket, Data}, OriState) ->
 							common:send_stat_err(State, gwstop),
                             {stop, vdrerror, NewState#vdritem{errorcount=ErrCount}};
                         true ->
-                            inet:setopts(Socket, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
+                            set_sock_opts(Socket),
                             {noreply, NewState#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
                     end;
                 {error, ErrType, NewState} ->
@@ -214,10 +271,10 @@ handle_info({tcp, Socket, Data}, OriState) ->
 					common:send_stat_err(State, gwstop),
                     {stop, ErrType, NewState};
                 {warning, NewState} ->
-                    inet:setopts(Socket, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
+                    set_sock_opts(Socket),
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT};
                 {ok, NewState} ->
-                    inet:setopts(Socket, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
+                    set_sock_opts(Socket),
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT}
             end
     end;

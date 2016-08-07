@@ -32,7 +32,7 @@
 -define(CONN_STAT_DISC_CLI,     7).     % Disconnection count due to VDR requirement
 -define(CONN_STAT_DISC_LEN,     8).     % Disconnection count due to MSG length error
 -define(CONN_STAT_DISC_PARITY,  9).     % Disconnection count due to MSG parity error
--define(CONN_STAT_DISC_SPLIT,  10).     % Disconnection count due to multi MSGes splitting error
+-define(CONN_STAT_SPLIT_ERR,   10).     % Multi MSGes splitting error
 -define(CONN_STAT_DISC_REST,   11).     % Disconnection count due to other MSG error, such as format and etc., which will lead to parse error
 -define(CONN_STAT_DISC_PACK,   12).     % Disconnection count due to sub MSGes, which can be combine to one big MSG, package index error
 -define(CONN_STAT_DISC_TIMEOUT,13).     % Disconnection count due to VDR timeout
@@ -53,7 +53,7 @@
 
 -define(SUP_WAIT_INTVL_MS, 5000).
 
--define(MAX_VDR_ERR_COUNT, 3).
+-define(MAX_VDR_ERR_COUNT, 5).
 
 -define(DB_HASH_UPDATE_INTERVAL, 3*60*60*1000).
 -define(DB_HASH_UPDATE_ONCE_COUNT, 2000).
@@ -128,9 +128,9 @@
 
 -define(WS2VDRFREQ, 10).
 
--define(VDR_MSG_TIMEOUT, 300000).
--define(VDR_MSG_RESP_TIMEOUT, 5000).
--define(CC_PID_TIMEOUT, 5000).
+-define(VDR_MSG_TIMEOUT,      300000).
+-define(VDR_MSG_RESP_TIMEOUT,   5000).
+-define(CC_PID_TIMEOUT,         5000).
 
 -define(SUB_PACK_INDI_HEADER, <<255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255>>).
 

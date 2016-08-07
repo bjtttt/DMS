@@ -1,6 +1,6 @@
-%%%
-%%% log.erl
-%%%
+%
+% log.erl
+%
 
 -module(log).
 

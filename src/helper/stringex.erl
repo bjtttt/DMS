@@ -86,9 +86,31 @@ is_string(String) when is_list(String) ->
                     false;
                 true -> 
                     true
-            end,
+            end
+    end,
     lists:all(Fun, String);
 is_string(_String) ->
     false.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%   true only when all strings in List are NOT an empty one
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+is_string_list(List) when is_list(List) ->
+    Len = length(List),
+    if
+        Len < 1 ->
+            false;
+        true ->
+            Fun = fun(X) ->
+                    case is_string(X) of
+                        true -> true;
+                        _ -> false
+                    end
+            end,
+            lists:all(Fun, List)
+    end;
+is_string_list(_List) ->
+    false.
 
