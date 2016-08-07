@@ -37,11 +37,11 @@ start_child_vdr(Socket, Addr) ->
         {error, Reason} ->
             case Reason of
                 already_present ->
-                    common:loginfo("mssup:start_child_vdr fails : already_present~n");
+                    common:loghint("mssup:start_child_vdr fails : already_present");
                 {already_strated, CPid} ->
-                    common:loginfo("mssup:start_child_vdr fails : already_started PID : ~p~n", [CPid]);
+                    common:logerr("mssup:start_child_vdr fails : already_started PID : ~p", [CPid]);
                 Msg ->
-                    common:loginfo("mssup:start_child_vdr fails : ~p~n", [Msg])
+                    common:logerr("mssup:start_child_vdr fails : ~p", [Msg])
             end,
             {error, Reason}
     end.         
@@ -65,11 +65,11 @@ start_child_mon(Socket) ->
         {error, Reason} ->
             case Reason of
                 already_present ->
-                    common:loginfo("mssup:start_child_mon fails : already_present~n");
+                    common:loghint("mssup:start_child_mon fails : already_present");
                 {already_strated, CPid} ->
-                    common:loginfo("mssup:start_child_mon fails : already_started PID : ~p~n", [CPid]);
+                    common:logerr("mssup:start_child_mon fails : already_started PID : ~p", [CPid]);
                 Msg ->
-                    common:loginfo("mssup:start_child_mon fails : ~p~n", [Msg])
+                    common:logerr("mssup:start_child_mon fails : ~p", [Msg])
             end,
             {error, Reason}
     end.          
@@ -85,7 +85,7 @@ stop_child_vdr(Pid) ->
         ok ->
             ok;
         {error, Reason} ->
-            common:loginfo("mssup:stop_child_vdr(PID : ~p) fails : ~p~n", [Reason, Pid]),
+            log:logerr("mssup:stop_child_vdr(Pid : ~p) fails : ~p", [Pid, Reason]),
             {error, Reason}
     end.
 
@@ -100,7 +100,7 @@ stop_child_mon(Pid) ->
         ok ->
             ok;
         {error, Reason} ->
-            common:loginfo("mssup:stop_child_mon fails(PID : ~p) : ~p~n", [Reason, Pid]),
+            log:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p~n", [Reason, Pid]),
             {error, Reason}
     end.
 
@@ -119,16 +119,16 @@ start_link() ->
         {ok, Pid} ->
             {ok, Pid};
         ignore ->
-            common:loginfo("mssup:start_link : ignore~n"),
+            common:loghint("mssup:start_link : ignore~n"),
             ignore;
         {error, Reason} ->
             case Reason of
                 {shutdown, Info} ->
-                    common:loginfo("mssup:start_link fails : shutdown : ~p~n", [Info]);
+                    common:logerr("mssup:start_link fails : shutdown : ~p", [Info]);
                 {already_strated, CPid} ->
-                    common:loginfo("mssup:start_link fails : already_started PID : ~p~n", [CPid]);
+                    common:logerr("mssup:start_link fails : already_started PID : ~p", [CPid]);
                 Msg ->
-                    common:loginfo("mssup:start_link fails : ~p~n", [Msg])
+                    common:logerr("mssup:start_link fails : ~p", [Msg])
             end,
             {error, Reason}
     end.
@@ -137,7 +137,7 @@ start_link() ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([]) ->
-    log:loginfo("mssup:init([])"),
+    log:loghint("mssup:init([])"),
     [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
     % Id        : used to identify the child specification internally by the supervisor.
     %             Notice that this identifier on occations has been called "name". 
@@ -172,33 +172,33 @@ init([]) ->
     % Listen VDR connection
     VDRServer = {
                  vdr_server,                                    % Id       = internal id
-                 {vdr_server, start_link, [LinkInfoPid]},                    % StartFun = {M, F, A}
-                 permanent,                                      % Restart  = permanent | transient | temporary
+                 {vdr_server, start_link, [LinkInfoPid]},       % StartFun = {M, F, A}
+                 permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor
-                 [vdr_server]                                    % Modules  = [Module] | dynamic
+                 [vdr_server]                                   % Modules  = [Module] | dynamic
                 },
     % Process VDR communication
     VDRHandler = {
-                  sup_vdr_handler,                               % Id       = internal id
+                  sup_vdr_handler,                              % Id       = internal id
                   {supervisor, start_link, [{local, sup_vdr_handler}, ?MODULE, [vdr_handler]]},
-                  permanent,                                     % Restart  = permanent | transient | temporary
-                  ?TIME_TERMINATE_VDR,                             % Shutdown = brutal_kill | int() >= 0 | infinity
-                  supervisor,                                     % Type     = worker | supervisor
+                  permanent,                                    % Restart  = permanent | transient | temporary
+                  ?TIME_TERMINATE_VDR,                          % Shutdown = brutal_kill | int() >= 0 | infinity
+                  supervisor,                                   % Type     = worker | supervisor
                   []                                            % Modules  = [Module] | dynamic
                  },
     % Listen Monitor connection
     MonServer = {
-                 mon_server,                                     % Id       = internal id
+                 mon_server,                                    % Id       = internal id
                  {mon_server, start_link, []},                  % StartFun = {M, F, A}
                  permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor
-                 [mon_server]                                    % Modules  = [Module] | dynamic
+                 [mon_server]                                   % Modules  = [Module] | dynamic
                 },
     % Process Monitor communication
     MonHandler = {
-                  sup_mon_handler,                               % Id       = internal id
+                  sup_mon_handler,                              % Id       = internal id
                   {supervisor, start_link, [{local, sup_mon_handler}, ?MODULE, [mon_handler]]},
                   permanent,                                    % Restart  = permanent | transient | temporary
                   ?TIME_TERMINATE_MON,                          % Shutdown = brutal_kill | int() >= 0 | infinity
@@ -217,7 +217,7 @@ init([]) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([Module]) ->
-    log:loginfo("mssup:init([Module]) : ~p", [Module]),
+    log:loghint("mssup:init([Module]) : ~p", [Module]),
     Instance = {
              	undefined,                 % Id       = internal id
                 {Module, start_link, []},  % StartFun = {M, F, A}

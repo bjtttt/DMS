@@ -6,97 +6,179 @@
 
 -include("../../include/header.hrl").
 
--export([loginfo/1, 
+-export([lognone/1, 
+        lognone/2, 
+        loginfo/1, 
         loginfo/2, 
-        loginfo/3]).
+        loghint/1, 
+        loghint/2, 
+        logerr/1, 
+        logerr/2]).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loginfo(Data) when is_binary(Data) ->
-    loginfo(Data, 1);
-loginfo(Data) when is_list(Data) ->
-    loginfo(Data, 1);
-loginfo(Data) ->
-	loginfo(Data, 1).
-loginfo(Data, DispLog) when is_binary(Data),
-							is_integer(DispLog) ->
-    try
-		if
-			DispLog =:= 1 ->
-				error_logger:info_msg(binary_to_list(Data))
-		end
-    catch
-        Oper:Msg ->
-			if
-				DispLog =:= 1 ->
-					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
-			end
-    end
-loginfo(Data, DispLog) when is_list(Data),
-							is_integer(DispLog) ->
-    try
-		if
-			DispLog =:= 1 ->
-				error_logger:info_msg(Data)
-		end
-    catch
-        Oper:Msg ->
-			if
-				DispLog =:= 1 ->
-					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
-			end
-    end;
-loginfo(_Data, DispLog) ->
-	if
-		DispLog =:= 1 ->
-			error_logger:error_msg("loginfo fails : no binary or list")
-	end.
+% Parameter :
+%       Format       : a list, for example : [], [Msg] or [Msg1, Msg2]
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+lognone(Format) ->
+    do_log(Format, ?DISP_LEVEL_NONE, 0).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+loginfo(Format) ->
+    do_log(Format, ?DISP_LEVEL_INFO, 0).
+
+loghint(Format) ->
+    do_log(Format, ?DISP_LEVEL_HINT, 0).
+
+logerr(Format) ->
+    do_log(Format, ?DISP_LEVEL_ERR, 1).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% Data is a list, for example : [], [Msg] or [Msg1, Msg2]
+% Parameter :
+%       Format      :
+%       CurLevel    : Only when current level is larger than or equal to the display level, can the message be displayed
+%       DispErr     :
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loginfo(Format, Data) when is_string(Format),
-						   is_binary(Data) ->
-	loginfo(Format, Data, 1);
-loginfo(Format, Data) when is_string(Format),
-						   is_list(Data) ->
-	loginfo(Format, Data, 1);
-loginfo(_Format, _Data) ->
-	loginfo(_Format, _Data, 1);
-loginfo(Format, Data, DispLog) when is_string(Format),
-									is_binary(Data) ->
-    try
-		if
-			DispLog =:= 1 ->
-				error_logger:info_msg(Format, binary_to_list(Data))
-		end
-    catch
-        Oper:Msg ->
-			if
-				DispLog =:= 1 ->
-					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
-			end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+do_log(Format, CurLevel, DispErr) when is_binary(Format),
+                                       CurLevel =< ?DISP_LEVEL_ERR,
+                                       CurLevel >= ?DISP_LEVEL_NONE,
+                                       DispErr =< 1,
+                                       DispErr >= 0 ->
+    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+    if
+        DispLevel =< CurLevel ->
+            try
+                if
+                    DispLog =:= 1 ->
+                        if
+                            DispErr == 0 ->
+                                error_logger:info_msg(binary_to_list(Format));
+                            true ->
+                                error_logger:error_msg(binary_to_list(Format))
+                        end
+                end
+            catch
+                Oper:Msg ->
+                    if
+                        DispLog =:= 1 ->
+                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                    end
+            end
     end;
-loginfo(Format, Data, DispLog) when is_string(Format),
-									is_list(Data) ->
-    try
-		if
-			DispLog =:= 1 ->
-				error_logger:info_msg(Format, Data)
-		end
-    catch
-        Oper:Msg ->
-			if
-				DispLog =:= 1 ->
-					error_logger:error_msg("loginfo exception : ~p : ~p", [Oper, Msg])
-			end
+do_log(Format, CurLevel, DispErr) when is_list(Format),
+                                       CurLevel =< ?DISP_LEVEL_ERR,
+                                       CurLevel >= ?DISP_LEVEL_NONE,
+                                       DispErr =< 1,
+                                       DispErr >= 0 ->
+    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+    if
+        DispLevel =< CurLevel ->
+            try
+                if
+                    DispLog =:= 1 ->
+                        if
+                            DispErr == 0 ->
+                                error_logger:info_msg(Format);
+                            true ->
+                                error_logger:error_msg(Format)
+                        end
+                end
+            catch
+                Oper:Msg ->
+                    if
+                        DispLog =:= 1 ->
+                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                    end
+            end
     end;
-loginfo(_Format, _Data, DispLog) ->
-	if
-		DispLog =:= 1 ->
-			error_logger:error_msg("loginfo fails : no binary or list")
-	end
+do_log(_Format, _CurLevel, _DispErr) ->
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameter :
+%       Data        : a list, for example : [], [Msg] or [Msg1, Msg2]
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+lognone(Format, Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_NONE, 0).
+
+loginfo(Format, Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_INFO, 0).
+
+loghint(Format, Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_HINT, 0).
+
+logerr(Format, Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_ERR, 1).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameter :
+%       Format      :
+%       Data        :
+%       CurLevel    : Only when current level is larger than or equal to the display level, can the message be displayed
+%       DispErr     :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+do_log(Format, Data, CurLevel, DispErr) when is_binary(Data),
+                                             CurLevel =< ?DISP_LEVEL_ERR,
+                                             CurLevel >= ?DISP_LEVEL_NONE,
+                                             DispErr =< 1,
+                                             DispErr >= 0 ->
+    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+    if
+        DispLevel =< CurLevel ->
+            try
+                if
+                    DispLog =:= 1 ->
+                        if
+                            DispErr == 0 ->
+                                error_logger:info_msg(Format, binary_to_list(Data));
+                            true ->
+                                error_logger:error_msg(Format, binary_to_list(Data))
+                        end
+                end
+            catch
+                Oper:Msg ->
+                    if
+                        DispLog =:= 1 ->
+                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                    end
+            end
+    end;
+do_log(Format, Data, CurLevel, DispErr) when is_list(Data),
+                                             CurLevel =< ?DISP_LEVEL_ERR,
+                                             CurLevel >= ?DISP_LEVEL_NONE,
+                                             DispErr =< 1,
+                                             DispErr >= 0 ->
+    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+    if
+        DispLevel =< CurLevel ->
+            try
+                if
+                    DispLog =:= 1 ->
+                        if
+                            DispErr == 0 ->
+                                error_logger:info_msg(Format, Data);
+                            true ->
+                                error_logger:error_msg(Format, Data)
+                        end
+                end
+            catch
+                Oper:Msg ->
+                    if
+                        DispLog =:= 1 ->
+                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                    end
+            end
+    end;
+do_log(_Format, _Data, _CurLevel, _DispErr) ->
+    ok.
 

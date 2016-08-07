@@ -47,6 +47,8 @@ start(_StartType, StartArgs) ->
 startserver(StartArgs) ->
     [UseRedisFlag, UseHttpGpsFlag] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
+    ets:insert(msgservertable, {displevel, ?DISP_LEVEL_HINT}),
+    ets:insert(msgservertable, {displog, 1}),
     if
         UseRedisFlag =:= 1 ->
             ets:insert(msgservertable, {useredis, 1});
@@ -78,58 +80,58 @@ startserver(StartArgs) ->
     
     case file:make_dir(?DEF_LOG_PATH ++ "/log") of
         ok ->
-            log:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
+            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
         {error, DirEx0} ->
-            log:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
+            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
         ok ->
-            log:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
+            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
         {error, DirEx1} ->
-            log:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
+            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
         ok ->
-            log:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
+            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
         {error, DirEx2} ->
-            log:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
+            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/media") of
         ok ->
-            log:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
+            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
         {error, DirEx3} ->
-            log:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
+            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
         ok ->
-            log:loginfo("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
+            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
         {error, DirEx4} ->
-            log:loginfo("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
+            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
     end,
     log:loginfo("Directories are initialized."),
     
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            log:loginfo("Dynamic Message Server starts initializing data structures."),
+            log:loghint("DMS starts initializing data structures."),
             case receive_redis_init_msg(UseRedis, 0) of
                 ok ->
                     LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
                     ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
                     
-                    CCPid = spawn(fun() -> code_convertor_process(0) end),
+                    CCPid = spawn(fun() -> code_convertor_process() end),
                     ets:insert(msgservertable, {ccpid, CCPid}),
                                         
                     VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
                     ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
                     
-                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process(0) end),
+                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
                     ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
 
                     LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
                     ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
 
-                    VDRLogPid = spawn(fun() -> vdr_log_process([], 0) end),
+                    VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
                     ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
 
                     VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
@@ -150,10 +152,10 @@ startserver(StartArgs) ->
                                             CCPid ! {self(), create},
                                             receive
                                                 created ->
-                                                    log:loginfo("Code convertor table is created"),
+                                                    log:loghint("Code convertor table is created"),
                                                     HttpGpsPid = spawn(fun() -> httpgps:http_gps_deamon(?DEF_HTTPGPS_SERVER, uninit, 0, 0, 0, 0, 1) end),
                                                     ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-                                                    log:loginfo("HTTP GPS process PID is ~p", [HttpGpsPid]),
+                                                    log:loghint("HTTP GPS process PID is ~p", [HttpGpsPid]),
                                                     case UseHttpGps of
                                                         1 ->
                                                             HttpGpsPid ! init;
@@ -171,10 +173,10 @@ startserver(StartArgs) ->
                     {error, "Message server fails to start : " ++ RedisError}                  
             end;
         ignore ->
-            log:loginfo("Message server fails to start : ignore"),
+            log:logerr("Message server fails to start : ignore"),
             ignore;
         {error, Error} ->
-            log:loginfo("Message server fails to start : ~p", [Error]),
+            log:logerr("Message server fails to start : ~p", [Error]),
             {error, Error}
     end.
 
@@ -189,7 +191,7 @@ startserver(StartArgs) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init_vdr_db_table() ->
     ets:delete_all_objects(vdrdbtable),
-    log:loginfo("Init vdr db table.").
+    log:loghint("Init vdr db table.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -202,7 +204,7 @@ init_vdr_db_table() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init_driver_table() ->
     ets:delete_all_objects(drivertable),
-    log:loginfo("Init driver table.").
+    log:loghint("Init driver table.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -215,45 +217,41 @@ init_driver_table() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init_last_pos_table() ->
     ets:delete_all_objects(lastpostable),
-    log:loginfo("Init last position table.").
+    log:loghint("Init last position table.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-vdr_log_process(VDRList, DispLog) ->
+vdr_log_process(VDRList) ->
     receive
         stop ->
-            log:loginfo("VDR log process stops.");
+            log:loghint("VDR log process stops.");
         reset ->
-            vdr_log_process([], DispLog);
-        enablelog ->
-            vdr_log_process(VDRList, 1);
-        disablelog ->
-            vdr_log_process(VDRList, 0);
+            vdr_log_process([]);
         {set, VID} ->
             VDRExclList = [C || C <- VDRList, C =/= VID],
             NewVDRList = lists:merge([VDRExclList, [VID]]),
-            vdr_log_process(NewVDRList, DispLog);
+            vdr_log_process(NewVDRList);
         {clear, VID} ->
             VDRExclList = [C || C <- VDRList, C =/= VID],
-            vdr_log_process(VDRExclList, DispLog);
+            vdr_log_process(VDRExclList);
         {Pid, count} ->
             Count = length(VDRList),
             Pid ! {Pid, Count},
-            vdr_log_process(VDRList, DispLog);
+            vdr_log_process(VDRList);
         {save, VDRID, FromVDR, MsgBin, DateTime} ->
             VDRInclList = [C || C <- VDRList, C =:= VDRID],
             Len = length(VDRInclList),
             if
                 Len =:= 1 ->
-                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog)
+                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime)
             end,
-            vdr_log_process(VDRList, DispLog);
+            vdr_log_process(VDRList);
         _ ->
-            log:loginfo("VDR log process : unknown message"),
-            vdr_log_process(VDRList, DispLog)
+            log:loghint("VDR log process : unknown message"),
+            vdr_log_process(VDRList)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -262,7 +260,7 @@ vdr_log_process(VDRList, DispLog) ->
 % Parameter :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog) ->
+save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime) ->
     if
         VDRID =/= undefined ->
             File = "/tmp/log/vdr/VDR" ++ integer_to_list(VDRID) ++ ".log",
@@ -277,9 +275,9 @@ save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog) ->
                     end,
                     file:close(IOFile);
                 {error, Reason} ->
-                    log:loginfo("Cannot open ~p : ~p", [File, Reason], DispLog);
+                    log:logerr("Cannot open ~p : ~p", [File, Reason]);
                 _ ->
-                    log:loginfo("Cannot open ~p : unknown", [File], DispLog)
+                    log:logerr("Cannot open ~p : unknown", [File])
             end;
         true ->
             ok
@@ -295,7 +293,7 @@ save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime, DispLog) ->
 vdr_online_table_process(VDROnlineList, VDROfflineList) ->
     receive
         stop ->
-            log:loginfo("VDR Online process stops.");
+            log:loghint("VDR online process stops.");
         reset ->
             vdr_online_table_process([], []);
         {add, VID, DateTime} ->
@@ -369,7 +367,7 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
             ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
             vdr_online_table_process(ListExclVIDOn, ListExclVIDOff);
         _ ->
-            log:loginfo("VDR Online process : unknown message"),
+            log:loghint("VDR online process : unknown message"),
             vdr_online_table_process(VDROnlineList, VDROfflineList)
     end.
 
@@ -382,7 +380,7 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 vdrtable_insert_delete_process() ->
     receive
         stop ->
-            log:loginfo("VDR table insert/delete process stops.");
+            log:loghint("VDR table insert/delete process stops.");
         {Pid, insert, Object} ->
             ets:insert(vdrtable, Object),
             Pid ! {Pid, ok},
@@ -406,7 +404,7 @@ vdrtable_insert_delete_process() ->
             Pid ! {Pid, Res},
             vdrtable_insert_delete_process();
         _ ->
-            log:loginfo("VDR table insert/delete process receive unknown msg."),
+            log:loghint("VDR table insert/delete process receive unknown msg."),
             vdrtable_insert_delete_process()
     end.
 
@@ -416,34 +414,30 @@ vdrtable_insert_delete_process() ->
 % Parameters :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-drivertable_insert_delete_process(DispLog) ->
+drivertable_insert_delete_process() ->
     receive
         stop ->
-            log:loginfo("Driver table insert/delete process stops.");
-        enablelog ->
-            drivertable_insert_delete_process(1);
-        disablelog ->
-            drivertable_insert_delete_process(0);
+            log:loghint("Driver table insert/delete process stops.");
         {chkinsdriverinfo, {DriverID, LicNo, CertCode, VDRAuthCode}} ->        % Check and insert
             if
                 DriverID =:= undefined ->
-                    log:loginfo("Cannot get driver item by driver undefined id", DispLog);
+                    log:loghint("Cannot get driver item by driver undefined id");
                 true ->
                     DriverInfos = ets:match(drivertable, {'$1', DriverID, '_', '_', '_'}),
                     DriverInfosCount = length(DriverInfos),
                     if
                         DriverInfosCount =:= 0 orelse DriverInfosCount =:= 1 ->
                             DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
-                            log:loginfo("Insert new driver item : ~p", [DriverInfoItem], DispLog),
+                            log:lognone("Insert new driver item : ~p", [DriverInfoItem]),
                             ets:insert(drivertable, DriverInfoItem);
                         true ->
                             ets:delete(drivertable, DriverID),
                             DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
-                            log:loginfo("Get ~p driver item by driver id ~p and re-create a new driver item : ~p", [DriverInfosCount, DriverID, DriverInfoItem], DispLog),
+                            log:lognone("Get ~p driver item by driver id ~p and re-create a new driver item : ~p", [DriverInfosCount, DriverID, DriverInfoItem]),
                             ets:insert(drivertable, DriverInfoItem)
                     end
             end,
-            drivertable_insert_delete_process(DispLog);
+            drivertable_insert_delete_process();
         {offwork, CertCode} ->
             DriverInfos = ets:match(drivertable, {'_', '$1', '$2', CertCode, '_'}),
             DriverInfosCount = length(DriverInfos),
@@ -453,9 +447,9 @@ drivertable_insert_delete_process(DispLog) ->
                     DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode},
                     ets:insert(drivertable, DriverInfoItem);
                 true ->
-                    log:loginfo("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode], DispLog)
+                    log:lognone("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode])
             end,                    
-            drivertable_insert_delete_process(DispLog);
+            drivertable_insert_delete_process();
         {Pid, checkcc, {CertCode, VDRAuthCode}} ->        % CertCode must be binary
             DriverInfos = ets:match(drivertable, {'_', '$1', '$2', CertCode, '_'}),
             DriverInfosCount = length(DriverInfos),
@@ -467,10 +461,10 @@ drivertable_insert_delete_process(DispLog) ->
                     ets:insert(drivertable, DriverInfoItem),
                     Pid ! {Pid, {DriverInfosCount, DriverID}};
                 true ->
-                    log:loginfo("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode], DispLog),
+                    log:lognone("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode]),
                     Pid ! {Pid, {DriverInfosCount, undefined}}
             end,
-            drivertable_insert_delete_process(DispLog);
+            drivertable_insert_delete_process();
         {Pid, getccbyvdr, VDRAuthCode} ->
             DriverInfos = ets:match(drivertable, {'_', '_', '_', '$1', VDRAuthCode}),
             DriverInfosCount = length(DriverInfos),
@@ -484,17 +478,17 @@ drivertable_insert_delete_process(DispLog) ->
                             Pid ! {Pid, CertCodeBin}
                     end;
                 true ->
-                    log:loginfo("Get ~p certificate code by vdr_auth_code ~p", [DriverInfosCount, VDRAuthCode], DispLog),
+                    log:lognone("Get ~p certificate code by vdr_auth_code ~p", [DriverInfosCount, VDRAuthCode]),
                     Pid ! {Pid, <<"">>}
             end,
-            drivertable_insert_delete_process(DispLog);
+            drivertable_insert_delete_process();
         {Pid, count} ->
             Count = ets:info(drivertable,size),
             Pid ! {Pid, Count},
-            drivertable_insert_delete_process(DispLog);
+            drivertable_insert_delete_process();
         _ ->
-            log:loginfo("Driver table insert/delete process receive unknown msg.", DispLog),
-            drivertable_insert_delete_process(DispLog)
+            log:loghint("Driver table insert/delete process receive unknown msg."),
+            drivertable_insert_delete_process()
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -506,7 +500,7 @@ drivertable_insert_delete_process(DispLog) ->
 lastpostable_insert_delete_process() ->
     receive
         stop ->
-            log:loginfo("Last pos table insert/delete process stops.");
+            log:loghint("Last pos table insert/delete process stops.");
         {Pid, get, VID} ->
             Infos = ets:match(lastpostable, {'_', VID, '$1', '$2'}),
             InfoCount = length(Infos),
@@ -535,7 +529,7 @@ lastpostable_insert_delete_process() ->
             Pid ! {Pid, Count},
             lastpostable_insert_delete_process();
         _ ->
-            log:loginfo("Last pos table insert/delete process receive unknown msg."),
+            log:loghint("Last pos table insert/delete process receive unknown msg."),
             lastpostable_insert_delete_process()
     end.
 
@@ -602,7 +596,7 @@ stop(_State) ->
         _ ->
             VDROnlinePid ! stop
     end,
-    error_logger:info_msg("Message server stops.").
+    log:loghint("Message server stops.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -614,48 +608,44 @@ stop(_State) ->
 %             others    -> doesn't display log message
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-code_convertor_process(DispLog) ->
+code_convertor_process() ->
     receive
         {Pid, create} ->            
             code_convertor:init_code_table(),
-            log:loginfo("Code table is initialized.", DispLog),
+            log:loghint("Code table is initialized."),
             Pid ! created,
-            code_convertor_process(DispLog);
+            code_convertor_process();
         stop ->
             ok;
-        enablelog ->
-            code_convertor_process(1);
-        disablelog ->
-            code_convertor_process(0);
         {Pid, gbk2utf8, Source} ->
             try
                 Destination = code_convertor:to_utf8(Source),
-                log:loginfo("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination], DispLog),
+                log:loginfo("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination]),
                 Pid ! Destination
             catch
                 _:Reason ->
-                    log:loginfo("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason], DispLog),
+                    log:logerr("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason]),
                     Pid ! Source
             end,
-            code_convertor_process(DispLog);
+            code_convertor_process();
         {Pid, utf82gbk, Source} ->
             try
                 Destination = code_convertor:to_gbk(Source),
-                log:loginfo("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination], DispLog),
+                log:loginfo("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination]),
                 Pid ! Destination
             catch
                 _:Reason ->
-                    log:loginfo("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason], DispLog),
+                    log:logerr("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason]),
                     Pid ! Source
             end,
-            code_convertor_process(DispLog);
+            code_convertor_process();
         {Pid, Msg} ->
-            log:loginfo("code_convertor_process : unknown request : ~p", [Msg], DispLog),
+            log:loghint("code_convertor_process : unknown request : ~p", [Msg]),
             Pid ! Msg,
-            code_convertor_process(DispLog);
+            code_convertor_process();
         _ ->
-            log:loginfo("code_convertor_process : unknown message", DispLog),
-            code_convertor_process(DispLog)
+            log:loghint("code_convertor_process : unknown message"),
+            code_convertor_process()
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
