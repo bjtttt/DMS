@@ -50,17 +50,9 @@ init([CSock, Addr, LinkInfoPid]) ->
 					 httpgpspid=HttpGpsPid, 
                      vdrlogpid=VDRLogPid, 
                      vdronlinepid=VDROnlinePid},
-	case common:send_stat_err(State, ?CONN_STAT_CONN) of
-        ok ->
-            common:send_vdr_table_operation(VDRTablePid, {insert, State}),
-            inet:setopts(CSock, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
-            {ok, State, ?VDR_MSG_TIMEOUT};
-        {modified, NewState} ->
-            common:send_vdr_table_operation(VDRTablePid, {insert, NewState}),
-            inet:setopts(CSock, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
-            {ok, NewState, ?VDR_MSG_TIMEOUT}
-    end.
-       
+	common:send_stat_err(State, ?CONN_STAT_CONN),
+    inet:setopts(CSock, [{active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]),
+    {ok, State, ?VDR_MSG_TIMEOUT}.       
 
 %handle_call({fetch, PoolId, Msg}, _From, State) ->
 %    Resp = mysql:fetch(PoolId, Msg),
