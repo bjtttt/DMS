@@ -109,7 +109,7 @@ handle_cast(_Msg, State) ->
 %% @private
 %%-------------------------------------------------------------------------
 handle_info({inet_async, LSock, Ref, {ok, CSock}},
-            #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=_LinkInfoPid}=State) ->
+            #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=LinkInfoPid}=State) ->
     try        
 		case common:set_sockopt(LSock, CSock, "vdr_server:handle_info({inet_async...)") of	        
 			ok -> 
@@ -124,7 +124,7 @@ handle_info({inet_async, LSock, Ref, {ok, CSock}},
             {error, Err} ->
                 log:logerr("vdr_server:handle_info(...) : common:safepeername(CSock : ~p) fails : ~p", [CSock, Err]);
             {ok, {Addr, _Port}} ->
-                case mssup:start_child_vdr(CSock, Addr) of
+                case mssup:start_child_vdr(CSock, Addr, LinkInfoPid) of
                     {ok, Pid} ->
                         case gen_tcp:controlling_process(CSock, Pid) of
                             ok ->

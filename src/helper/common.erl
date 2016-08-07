@@ -579,6 +579,17 @@ get_str_bin_to_bin_list(S) when is_binary(S),
 get_str_bin_to_bin_list(_S) ->
 	[].
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   VDR sends information to vdr table process.
+% Parameter :
+%       VDRTablePid :
+%       Oper        :
+% Return :
+%       ok | {modified, LinkInfoPid}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 send_vdr_table_operation(VDRTablePid, Oper) ->
     case VDRTablePid of
         undefined ->
@@ -587,96 +598,69 @@ send_vdr_table_operation(VDRTablePid, Oper) ->
 				{vdrtablepid, VDRTablePid1} ->
 		            case VDRTablePid1 of
 		                undefined ->
-		                    ok;
+		                    nofoundpid;
 		                _ ->
 		                    case Oper of
-		                        {Pid, insert, _Object} ->
-									%common:loginfo("undefined VDRTablePid insert response"),
-									%common:loginfo("_00"),
-		                            VDRTablePid1 ! Oper,
-									%common:loginfo("_01"),
-		                            receive
-		                                {Pid, ok} ->
-											%common:loginfo("_02"),
-		                                    ok
-		                            end;
-		                        {_Pid, insert, _Object, noresp} ->
-									%common:loginfo("undefined VDRTablePid insert no response"),
-									%common:loginfo("_10"),
+		                        {insert, _Object} ->
 		                            VDRTablePid1 ! Oper;
-		                        {Pid, delete, _Key} ->
-		                            VDRTablePid1 ! Oper,
-		                            receive
-		                                {Pid, ok} ->
-		                                    ok
-		                            end;
-		                        {_Pid, delete, _Key, noresp} ->
+		                        {delete, _Key} ->
 		                            VDRTablePid1 ! Oper;
-								{Pid, count} ->
+								{count} ->
 									VDRTablePid1 ! Oper,
 		                            receive
-		                                {Pid, Count} ->
-		                                    Count
+		                                Count -> Count
 		                            end;
-								{Pid, lookup, _Key} ->
+								{lookup, _Key} ->
 									VDRTablePid1 ! Oper,
 		                            receive
-		                                {Pid, Res} ->
-		                                    Res
+		                                Res -> Res
 		                            end
 		                  end
 		            end;
 				_ ->
 					ok
-			end;
+			end,
+            {modified, VDRTablePid1};
         _ ->
             case Oper of
-                {Pid, insert, _Object} ->
-					%common:loginfo("VDRTablePid insert response"),
-					%common:loginfo("00"),
-                    VDRTablePid ! Oper,
-					%common:loginfo("01"),
-                    receive
-                        {Pid, ok} ->
-							%common:loginfo("02"),
-                            ok
-                    end;
-                {_Pid, insert, _Object, noresp} ->
-					%common:loginfo("VDRTablePid insert no response"),
-					%common:loginfo("10"),
+                {insert, _Object} ->
                     VDRTablePid ! Oper;
-                {Pid, delete, _Key} ->
-                    VDRTablePid! Oper,
+                {delete, _Key} ->
+                    VDRTablePid ! Oper;
+                {count} ->
+                    VDRTablePid ! Oper,
                     receive
-                        {Pid, ok} ->
-                            ok
+                        Count -> Count
                     end;
-                {_Pid, delete, _Key, noresp} ->
-                      VDRTablePid ! Oper;
-				{Pid, count} ->
-					VDRTablePid ! Oper,
+                {lookup, _Key} ->
+                    VDRTablePid ! Oper,
                     receive
-                        {Pid, Count} ->
-                            Count
-                    end;
-				{Pid, lookup, _Key} ->
-					VDRTablePid ! Oper,
-                    receive
-                        {Pid, Res} ->
-                            Res
+                        Res -> Res
                     end
-            end
+            end,
+            ok
     end.
-          
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   VDR sends information to link information process.
+% Parameter :
+%       State   :
+%       Type    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 send_stat_err(State, Type) ->
 	if
 		State#vdritem.linkpid =/= undefined ->
-			State#vdritem.linkpid ! {self(), Type};
+			State#vdritem.linkpid ! {self(), Type},
+            ok;
 		true ->
             [Result] = ets:lookup(msgservertable, vdrtablepid),
 			case Result of
-				{linkpid, LinkPid} ->
-					LinkPid ! {self(), Type};
+				{linkpid, LinkInfoPid} ->
+					LinkInfoPid ! {self(), Type},
+                    {modified, #vdritem{linkpid=LinkInfoPid}=State};
 				_ ->
 					ok
 			end

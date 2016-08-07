@@ -381,16 +381,8 @@ vdrtable_insert_delete_process() ->
     receive
         stop ->
             log:loghint("VDR table insert/delete process stops.");
-        {Pid, insert, Object} ->
-            ets:insert(vdrtable, Object),
-            Pid ! {Pid, ok},
-            vdrtable_insert_delete_process();
         {insert, Object} ->
             ets:insert(vdrtable, Object),
-            vdrtable_insert_delete_process();
-        {Pid, delete, Key} ->
-            ets:delete(vdrtable, Key),
-            Pid ! {Pid, ok},
             vdrtable_insert_delete_process();
         {delete, Key} ->
             ets:delete(vdrtable, Key),
