@@ -17,7 +17,6 @@
 		 send_sql_to_db_nowait/3,
 		 send_msg_to_ws/2,
 		 send_msg_to_ws_nowait/2,
-		 get_record_column_info/1,
 		 remove_empty_item_in_binary_list/2]).
 
 -include("../include/header.hrl").
@@ -370,92 +369,6 @@ safe_process_vdr_msg(Socket, Msg, State) ->
             {error, exception, State}
     end.
 
-get_record_column_info(Record) ->
-	{<<"vehicle">>, <<"code">>, VehicleCode} = get_record_field(<<"vehicle">>, Record, <<"code">>),
-	% "id" is PK, so it cannot be null or empty
-    {<<"device">>, <<"id">>, VDRID} = get_record_field(<<"device">>, Record, <<"id">>),
-    % "serial" is NOT NULL & UNIQUE, so it cannot be null or undefined
-    {<<"device">>, <<"serial_no">>, VDRSerialNo} = get_record_field(<<"device">>, Record, <<"serial_no">>),
-    % "authen_code" is NOT NULL & UNIQUE, so it cannot be null or undefined
-    {<<"device">>, <<"authen_code">>, VDRAuthenCode} = get_record_field(<<"device">>, Record, <<"authen_code">>),
-    % "id" is PK, so it cannot be null. However it can be undefined because vehicle table device_id may don't be euqual to device table id 
-    {<<"vehicle">>, <<"id">>, VehicleID} = get_record_field(<<"vehicle">>, Record, <<"id">>),
-    {<<"vehicle">>, <<"driver_id">>, DriverID} = get_record_field(<<"vehicle">>, Record, <<"driver_id">>),
-	{VDRID, VDRSerialNo, VDRAuthenCode, VehicleCode, VehicleID, DriverID}.
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Return	: [{ID0, "YY-MM-DD hh:mm:ss"}, {ID1, "YY-MM-DD hh:mm:ss"}, ...]
-% 			"YY-MM-DD hh:mm:ss" is alarm time.
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%get_alarm_list(AlarmList) when is_list(AlarmList),
-%							    length(AlarmList) > 0 ->
-%	[H|T] = AlarmList,
-%    {<<"vehicle_alarm">>, <<"type_id">>, TypeId} = get_record_field(<<"vehicle_alarm">>, H, <<"type_id">>),
-%    {<<"vehicle_alarm">>, <<"alarm_time">>, {datetime, {{YY,MM,DD},{Hh,Mm,Ss}}}} = get_record_field(<<"vehicle_alarm">>, H, <<"alarm_time">>),
-%    %{<<"vehicle_alarm">>, <<"sn">>, SN} = get_record_field(<<"vehicle_alarm">>, H, <<"sn">>),
-%	YYS = integer_to_list(vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(YY))),
-%	MMS = integer_to_list(MM),
-%	DDS = integer_to_list(DD),
-%	HhS = integer_to_list(Hh),
-%	MmS = integer_to_list(Mm),
-%	SsS = integer_to_list(Ss),
-%	DTS = common:combine_strings([YYS, "-", MMS, "-", DDS, " ", HhS, ":", MmS, ":", SsS], false),
-%	Cur = [{alarmitem, VehicleID, TypeId, DTS}],
-%	case T of
-%
-%		[] ->
-%			Cur;
-%		_ ->
-%			Res = get_alarm_list(T),
-%			case get_alarm_item(TypeId, Res) of
-%				empty ->
-%					lists:merge(Cur, Res);
-%				_ ->
-%					Res	
-%		end			
-%	end;
-%get_alarm_list(_AlarmList) ->
-%	[].
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%	[{alarmitem,19280,0,{{2013,10,24},{18,21,56}}}]
-%
-% Return	: [{ID0, "YY-MM-DD hh:mm:ss"}, {ID1, "YY-MM-DD hh:mm:ss"}, ...]
-% 			"YY-MM-DD hh:mm:ss" is alarm time.
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%get_alarm_list_from_table(AlarmList) when is_list(AlarmList),
-%										  length(AlarmList) > 0 ->
-%	[H|T] = AlarmList,
-%   {alarmitem, VehicleID, TypeId, {{YY,MM,DD},{Hh,Mm,Ss}}} = H,
-%	YYS = integer_to_list(vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(YY))),
-%	MMS = integer_to_list(MM),
-%	DDS = integer_to_list(DD),
-%	HhS = integer_to_list(Hh),
-%	MmS = integer_to_list(Mm),
-%	SsS = integer_to_list(Ss),
-%	DTS = common:combine_strings([YYS, "-", MMS, "-", DDS, " ", HhS, ":", MmS, ":", SsS], false),
-%	Cur = [{TypeId, DTS}],
-%	case T of
-%		[] ->
-%			Cur;
-%		_ ->
-%			Res = get_alarm_list_from_table(T),
-%			case get_alarm_item(TypeId, Res) of
-%				empty ->
-%					lists:merge(Cur, Res);
-%				_ ->
-%					Res	
-%		end			
-%	end;
-%get_alarm_list_from_table(_AlarmList) ->
-%	[].
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % ID        :
@@ -474,7 +387,6 @@ send_data_to_vdr(ID, Tel, FlowIdx, MsgBody, State) ->
 	LinkPid = State#vdritem.linkpid,	
 	case is_binary(MsgBody) of
 		true ->
-			%common:loginfo("1"),
 			MsgLen = byte_size(MsgBody),
 			try
 				if
