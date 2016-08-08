@@ -101,24 +101,12 @@ save_msg_4_vdr(State, FromVDR, Msg) ->
 			{Hour,Min,Second} = erlang:time(),
 			NewMsg = [{FromVDR, Msg, Year, Month, Day, Hour, Min, Second}],
 			NewStoredMsg = lists:merge([StoredMsg, NewMsg]),
-            log:lognone("VDR (id ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p) storing Data :~n~p", 
-                        [VDRID,
-                         State#vdritem.serialno,
-                         State#vdritem.auth,
-                         State#vdritem.vehicleid,
-                         State#vdritem.vehiclecode,
-                         NewStoredMsg]),
+            logvdr(none, State, "Store data : ~p", NewStoredMsg),
 			State#vdritem{storedmsg4save=NewStoredMsg};
 		true ->
             if
                 StoredMsg =/= [] ->
-                    log:lognone("VDR (id ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p) will send the stored data :~n~p", 
-                                [VDRID,                                                                                                               
-                                 State#vdritem.serialno,                                                                                                                     
-                                 State#vdritem.auth,
-                                 State#vdritem.vehicleid,
-                                 State#vdritem.vehiclecode,
-                                 StoredMsg]),
+                    logvdr(none, State, " Send stored data : ~p", StoredMsg),
                     save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid);
                 true ->
                     ok
@@ -126,6 +114,7 @@ save_msg_4_vdr(State, FromVDR, Msg) ->
 			{Year,Month,Day} = erlang:date(),
 			{Hour,Min,Second} = erlang:time(),
 			DateTime = {Year, Month, Day, Hour, Min, Second},
+            logvdr(none, State, " Send data : ~p", Msg),
 			VDRLogPid ! {save, VDRID, FromVDR, Msg, DateTime},
 			State#vdritem{storedmsg4save=[]}
 	end.
@@ -350,17 +339,107 @@ terminate(Reason, State) ->
                 State#vdritem.driverid,
                 Reason]),
     Socket = State#vdritem.socket,
+    VID = State#vdritem.id,
     VDRTablePid = State#vdritem.vdrtablepid,
+    VDROnlinePid = State#vdritem.vdronlinepid,
     case Socket of
         undefined ->
+            log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined socket",
+                       [self(),
+                        State#vdritem.addr, 
+                        State#vdritem.id, 
+                        State#vdritem.serialno, 
+                        State#vdritem.auth, 
+                        State#vdritem.vehicleid, 
+                        State#vdritem.vehiclecode, 
+                        State#vdritem.driverid]),
             ok;
         _ ->
-            common:send_vdr_table_operation(VDRTablePid, {delete, Socket})
+            if 
+                VDRTablePid =/= undefined ->
+                   common:send_vdr_table_operation(VDRTablePid, {delete, Socket});
+                true ->
+                    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined VDR table processor id",
+                               [self(),
+                                State#vdritem.addr, 
+                                State#vdritem.id, 
+                                State#vdritem.serialno, 
+                                State#vdritem.auth, 
+                                State#vdritem.vehicleid, 
+                                State#vdritem.vehiclecode, 
+                                State#vdritem.driverid]),
+                    ok
+            end
+    end,
+    if
+        VDROnlinePid =/= undefined ->
+            {Year,Month,Day} = erlang:date(),
+            {Hour,Min,Second} = erlang:time(),
+            if
+                VID =/= undefined ->
+                    VDROnlinePid ! {addoff, VID, {Year,Month,Day,Hour,Min,Second}};
+                true ->
+                    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined VDR id",
+                               [self(),
+                                State#vdritem.addr, 
+                                State#vdritem.id, 
+                                State#vdritem.serialno, 
+                                State#vdritem.auth, 
+                                State#vdritem.vehicleid, 
+                                State#vdritem.vehiclecode, 
+                                State#vdritem.driverid]),
+                    ok
+            end;
+        true ->
+            log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined VDR online process id.",
+                       [self(),
+                        State#vdritem.addr, 
+                        State#vdritem.id, 
+                        State#vdritem.serialno, 
+                        State#vdritem.auth, 
+                        State#vdritem.vehicleid, 
+                        State#vdritem.vehiclecode, 
+                        State#vdritem.driverid])
     end,
 	try gen_tcp:close(State#vdritem.socket)
     catch
         _:Ex ->
-            common:loginfo("VDR (~p) : exception when gen_tcp:close : ~p", [State#vdritem.addr, Ex])
+            log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : gen_tcp:close(Socket ~p - address ~p) exception : ~p",
+                       [self(),
+                        State#vdritem.addr, 
+                        State#vdritem.id, 
+                        State#vdritem.serialno, 
+                        State#vdritem.auth, 
+                        State#vdritem.vehicleid, 
+                        State#vdritem.vehiclecode, 
+                        State#vdritem.driverid,
+                        State#vdritem.socket,
+                        State#vdritem.addr,
+                        Ex])
+    end.
+
+logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
+                                           is_list(DataEx) ->
+    Format = "(Pid ~p) VDR handler (id ~p, addr ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p, driverid ~p) : ",
+    NewFormat = string:concat(Format, FormatEx),
+    Data = [self(),
+            State#vdritem.id, 
+            State#vdritem.addr,
+            State#vdritem.serialno,
+            State#vdritem.auth,
+            State#vdritem.vehicleid,
+            State#vdritem.vehiclecode,
+            State#vdritem.driverid],
+    NewData = lists:append(Data, DataEx),
+    if
+        Type == error ->
+            log:logerr(NewFormat, NewData);
+        Type == hint ->
+            log:loghint(NewFormat, NewData);
+        Type == info ->
+            log:loginfo(NewFormat, NewData);
+        true ->
+            log:lognone(NewFormat, NewData)
     end.
 
 code_change(_OldVsn, State, _Extra) ->    
