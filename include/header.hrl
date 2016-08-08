@@ -2,10 +2,11 @@
 % header.hrl
 %
 
--define(DISP_LEVEL_NONE,    0).
--define(DISP_LEVEL_INFO,    1).
--define(DISP_LEVEL_HINT,    2).
--define(DISP_LEVEL_ERR,     3).
+-define(DISP_LEVEL_ALL,     0).
+-define(DISP_LEVEL_NONE,    1).
+-define(DISP_LEVEL_INFO,    2).
+-define(DISP_LEVEL_HINT,    3).
+-define(DISP_LEVEL_ERR,     4).
 
 -define(SUP_MAX_RESTART,    3).
 -define(SUP_MAX_TIME,       1).

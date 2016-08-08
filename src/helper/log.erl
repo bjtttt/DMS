@@ -21,6 +21,9 @@
 %       Format       : a list, for example : [], [Msg] or [Msg1, Msg2]
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+logall(Format) ->
+    do_log(Format, ?DISP_LEVEL_ALL, 0).
+
 lognone(Format) ->
     do_log(Format, ?DISP_LEVEL_NONE, 0).
 
@@ -43,7 +46,7 @@ logerr(Format) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_log(Format, CurLevel, DispErr) when is_binary(Format),
                                        CurLevel =< ?DISP_LEVEL_ERR,
-                                       CurLevel >= ?DISP_LEVEL_NONE,
+                                       CurLevel >= ?DISP_LEVEL_ALL,
                                        DispErr =< 1,
                                        DispErr >= 0 ->
     [{displog, DispLog}] = ets:lookup(msgservertable, displog),
@@ -70,7 +73,7 @@ do_log(Format, CurLevel, DispErr) when is_binary(Format),
     end;
 do_log(Format, CurLevel, DispErr) when is_list(Format),
                                        CurLevel =< ?DISP_LEVEL_ERR,
-                                       CurLevel >= ?DISP_LEVEL_NONE,
+                                       CurLevel >= ?DISP_LEVEL_ALL,
                                        DispErr =< 1,
                                        DispErr >= 0 ->
     [{displog, DispLog}] = ets:lookup(msgservertable, displog),
@@ -104,6 +107,9 @@ do_log(_Format, _CurLevel, _DispErr) ->
 %       Data        : a list, for example : [], [Msg] or [Msg1, Msg2]
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+logall(Format, Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_ALL, 0).
+
 lognone(Format, Data) ->
     do_log(Format, Data, ?DISP_LEVEL_NONE, 0).
 
@@ -127,7 +133,7 @@ logerr(Format, Data) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_log(Format, Data, CurLevel, DispErr) when is_binary(Data),
                                              CurLevel =< ?DISP_LEVEL_ERR,
-                                             CurLevel >= ?DISP_LEVEL_NONE,
+                                             CurLevel >= ?DISP_LEVEL_ALL,
                                              DispErr =< 1,
                                              DispErr >= 0 ->
     [{displog, DispLog}] = ets:lookup(msgservertable, displog),
@@ -154,7 +160,7 @@ do_log(Format, Data, CurLevel, DispErr) when is_binary(Data),
     end;
 do_log(Format, Data, CurLevel, DispErr) when is_list(Data),
                                              CurLevel =< ?DISP_LEVEL_ERR,
-                                             CurLevel >= ?DISP_LEVEL_NONE,
+                                             CurLevel >= ?DISP_LEVEL_ALL,
                                              DispErr =< 1,
                                              DispErr >= 0 ->
     [{displog, DispLog}] = ets:lookup(msgservertable, displog),

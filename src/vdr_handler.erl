@@ -101,12 +101,12 @@ save_msg_4_vdr(State, FromVDR, Msg) ->
 			{Hour,Min,Second} = erlang:time(),
 			NewMsg = [{FromVDR, Msg, Year, Month, Day, Hour, Min, Second}],
 			NewStoredMsg = lists:merge([StoredMsg, NewMsg]),
-            logvdr(none, State, "Store data : ~p", NewStoredMsg),
+            logvdr(none, State, "save_msg_4_vdr(...) : Store data : ~p", NewStoredMsg),
 			State#vdritem{storedmsg4save=NewStoredMsg};
 		true ->
             if
                 StoredMsg =/= [] ->
-                    logvdr(none, State, " Send stored data : ~p", StoredMsg),
+                    logvdr(none, State, "save_msg_4_vdr(...) : Send stored data : ~p", StoredMsg),
                     save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid);
                 true ->
                     ok
@@ -152,12 +152,7 @@ save_online_msg(VID, State) ->
 			{Hour,Min,Second} = erlang:time(),
 			VDROnlinePid ! {add, VID, {Year,Month,Day,Hour,Min,Second}};
 		true ->
-            log:logerr("VDR (id ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p) has no VDR online process id.",
-                       [State#vdritem.id,
-                        State#vdritem.serialno,
-                        State#vdritem.auth,
-                        State#vdritem.vehicleid,
-                        State#vdritem.vehiclecode])
+            logvdr(error, State, "save_online_msg(...) : no VDR online process id", [])
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -171,16 +166,7 @@ handle_info({tcp, Socket, Data}, PrevState) ->
 	Pid = PrevState#vdritem.pid,
 	LinkInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
 	MidState = save_msg_4_vdr(PrevState, true, Data),
-    common:lognone("~p : Data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p)~n~p",
-				   [self(),
-					MidState#vdritem.addr, 
-					MidState#vdritem.id, 
-					MidState#vdritem.serialno, 
-					MidState#vdritem.auth, 
-					MidState#vdritem.vehicleid, 
-                    MidState#vdritem.vehiclecode, 
-                    MidState#vdritem.driverid,
-					Data]),
+    logvdr(all, MidState, "handle_info(...) : ~p", [Data]),
     % Update active time for VDR
 	DateTime = {erlang:date(), erlang:time()},
     State = MidState#vdritem{acttime=DateTime},
@@ -207,15 +193,7 @@ handle_info({tcp, Socket, Data}, PrevState) ->
         [] ->
 			common:send_stat_err(State, ?CONN_STAT_SPLIT_ERR),
             ErrCount = State#vdritem.errorcount + 1,
-            log:logerror("~p : Data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : Empty splitted data.",
-                           [self(),
-                            MidState#vdritem.addr, 
-                            MidState#vdritem.id, 
-                            MidState#vdritem.serialno, 
-                            MidState#vdritem.auth, 
-                            MidState#vdritem.vehicleid, 
-                            MidState#vdritem.vehiclecode, 
-                            MidState#vdritem.driverid]),
+            logvdr(error, State, "handle_info(...) : Empty splitted data from ~p", [Msgs]),
             if
                 ErrCount >= ?MAX_VDR_ERR_COUNT ->
 					common:send_stat_err(State, ?CONN_STAT_DISC_ERR_CNT),
@@ -225,23 +203,14 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                     set_sock_opts(Socket),
                     {noreply, State#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
             end;    
-        _ ->
+        NewMsgs ->
             case process_vdr_msges(Socket, Msgs, State) of
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 % Should revisit here for error message definitions
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 {error, vdrerror, NewState} ->
                     ErrCount = NewState#vdritem.errorcount + 1,
-                    log:logerror("~p : Wrong data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : ~p.",
-                                   [self(),
-                                    MidState#vdritem.addr, 
-                                    MidState#vdritem.id, 
-                                    MidState#vdritem.serialno, 
-                                    MidState#vdritem.auth, 
-                                    MidState#vdritem.vehicleid, 
-                                    MidState#vdritem.vehiclecode, 
-                                    MidState#vdritem.driverid,
-                                    Msgs]),
+                    logvdr(error, State, "handle_info(...) : Wrong splitted data : ~p", [NewMsgs]),
                     common:send_stat_err(State, ?CONN_STAT_UNK_ERR),
                     if
                         ErrCount >= ?MAX_VDR_ERR_COUNT ->
@@ -285,41 +254,16 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT}
             end
     end;
-handle_info({tcp_closed, _Socket}, State) ->    
-    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : handle_info(timeout, State)) : tcp_closed", 
-               [self(),
-                State#vdritem.addr, 
-                State#vdritem.id, 
-                State#vdritem.serialno, 
-                State#vdritem.auth, 
-                State#vdritem.vehicleid, 
-                State#vdritem.vehiclecode, 
-                State#vdritem.driverid]),
+handle_info({tcp_closed, _Socket}, State) -> 
+    logvdr(error, State, "handle_info(...) : tcp_closed", []),
 	common:send_stat_err(State, ?CONN_STAT_DISC_CLI),
 	{stop, tcp_closed, State};
 handle_info(timeout, State) ->
-    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : handle_info(timeout, State)) : Timeout", 
-               [self(),
-                State#vdritem.addr, 
-                State#vdritem.id, 
-                State#vdritem.serialno, 
-                State#vdritem.auth, 
-                State#vdritem.vehicleid, 
-                State#vdritem.vehiclecode, 
-                State#vdritem.driverid]),
+    logvdr(error, State, "handle_info(...) : timeout", []),
 	common:send_stat_err(State, ?CONN_STAT_DISC_TIMEOUT),
 	{stop, vdrtimeout, State};
 handle_info(Info, State) ->   
-    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : handle_info(Info ~p, State)) : Unknown", 
-               [self(),
-                State#vdritem.addr, 
-                State#vdritem.id, 
-                State#vdritem.serialno, 
-                State#vdritem.auth, 
-                State#vdritem.vehicleid, 
-                State#vdritem.vehiclecode, 
-                State#vdritem.driverid,
-                Info]),
+    logvdr(error, State, "handle_info(...) : unknown ~p", [Info]),
 	{stop, unknown, State}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -328,47 +272,20 @@ handle_info(Info, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 terminate(Reason, State) ->
-	log:loginfo("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason ~p, State)",
-               [self(),
-                State#vdritem.addr, 
-                State#vdritem.id, 
-                State#vdritem.serialno, 
-                State#vdritem.auth, 
-                State#vdritem.vehicleid, 
-                State#vdritem.vehiclecode, 
-                State#vdritem.driverid,
-                Reason]),
+    logvdr(info, State, "terminate(Reason ~p, State)", [Reason]),
     Socket = State#vdritem.socket,
     VID = State#vdritem.id,
     VDRTablePid = State#vdritem.vdrtablepid,
     VDROnlinePid = State#vdritem.vdronlinepid,
     case Socket of
         undefined ->
-            log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined socket",
-                       [self(),
-                        State#vdritem.addr, 
-                        State#vdritem.id, 
-                        State#vdritem.serialno, 
-                        State#vdritem.auth, 
-                        State#vdritem.vehicleid, 
-                        State#vdritem.vehiclecode, 
-                        State#vdritem.driverid]),
-            ok;
+            logvdr(error, State, "terminate(...) undefined socket", []);
         _ ->
             if 
                 VDRTablePid =/= undefined ->
                    common:send_vdr_table_operation(VDRTablePid, {delete, Socket});
                 true ->
-                    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined VDR table processor id",
-                               [self(),
-                                State#vdritem.addr, 
-                                State#vdritem.id, 
-                                State#vdritem.serialno, 
-                                State#vdritem.auth, 
-                                State#vdritem.vehicleid, 
-                                State#vdritem.vehiclecode, 
-                                State#vdritem.driverid]),
-                    ok
+                    logvdr(error, State, "terminate(...) undefined VDR table processor id", [])
             end
     end,
     if
@@ -379,45 +296,20 @@ terminate(Reason, State) ->
                 VID =/= undefined ->
                     VDROnlinePid ! {addoff, VID, {Year,Month,Day,Hour,Min,Second}};
                 true ->
-                    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined VDR id",
-                               [self(),
-                                State#vdritem.addr, 
-                                State#vdritem.id, 
-                                State#vdritem.serialno, 
-                                State#vdritem.auth, 
-                                State#vdritem.vehicleid, 
-                                State#vdritem.vehiclecode, 
-                                State#vdritem.driverid]),
-                    ok
+                    logvdr(error, State, "terminate(...) undefined VDR id", [])
             end;
         true ->
-            log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason, State) undefined VDR online process id.",
-                       [self(),
-                        State#vdritem.addr, 
-                        State#vdritem.id, 
-                        State#vdritem.serialno, 
-                        State#vdritem.auth, 
-                        State#vdritem.vehicleid, 
-                        State#vdritem.vehiclecode, 
-                        State#vdritem.driverid])
+            logvdr(error, State, "terminate(...) undefined VDR  online process id", [])
     end,
 	try gen_tcp:close(State#vdritem.socket)
     catch
         _:Ex ->
-            log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : gen_tcp:close(Socket ~p - address ~p) exception : ~p",
-                       [self(),
-                        State#vdritem.addr, 
-                        State#vdritem.id, 
-                        State#vdritem.serialno, 
-                        State#vdritem.auth, 
-                        State#vdritem.vehicleid, 
-                        State#vdritem.vehiclecode, 
-                        State#vdritem.driverid,
-                        State#vdritem.socket,
-                        State#vdritem.addr,
-                        Ex])
+            logvdr(error, State, "terminate(...) : gen_tcp:close(...) exception : ~p", [Ex])
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
                                            is_list(DataEx) ->
     Format = "(Pid ~p) VDR handler (id ~p, addr ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p, driverid ~p) : ",
@@ -438,19 +330,24 @@ logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
             log:loghint(NewFormat, NewData);
         Type == info ->
             log:loginfo(NewFormat, NewData);
+        Type == none ->
+            log:lognone(NewFormat, NewData);
         true ->
-            log:lognone(NewFormat, NewData)
+            log:logall(NewFormat, NewData)
     end.
 
 code_change(_OldVsn, State, _Extra) ->    
 	{ok, State}.
 
-%%%
-%%% Return :
-%%%     {ok, State}
-%%%     {warning, State}
-%%%     {error, vdrerror/invaliderror/systemerror/exception/unknown, State}  
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+% Return :
+%     {ok, State}
+%     {warning, State}
+%     {error, vdrerror/invaliderror/systemerror/exception/unknown, State}  
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 process_vdr_msges(Socket, Msges, State) ->
     [H|T] = Msges,
     Result = safe_process_vdr_msg(Socket, H, State),
