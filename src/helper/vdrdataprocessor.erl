@@ -2051,3 +2051,220 @@ get_not_0_lat_lon(Lat, Lon, State) ->
             %end
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% ID        :
+% FlowIdx   :
+% MsgBody   :
+% Pid       :
+% VDRPid    :
+%
+% Return    : the next message index
+%       10,20,30,40,... is for the index of the message from WS to VDR
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+send_data_to_vdr(ID, Tel, FlowIdx, MsgBody, State) ->
+    Socket = State#vdritem.socket,
+    Pid = State#vdritem.pid,
+    LinkPid = State#vdritem.linkpid,    
+    case is_binary(MsgBody) of
+        true ->
+            MsgLen = byte_size(MsgBody),
+            try
+                if
+                    ID == 16#8001 ->
+                        MsgBodyTypeBytes = binary:part(MsgBody, MsgLen-3, 2),
+                        if
+                            MsgBodyTypeBytes =/= <<2,0>> andalso MsgBodyTypeBytes =/= <<0,2>> andalso MsgBodyTypeBytes =/= <<1,2>> ->
+                                common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, MsgType ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBodyTypeBytes, MsgBody]);
+                            true ->
+                                ok
+                        end;
+                    true ->
+                        common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBody])
+                end
+            catch
+                _:_ ->
+                    ok
+            end,
+            if
+                MsgLen > 24 ->
+                    Header = binary:part(MsgBody, 0, 20),
+                    if
+                        Header == ?SUB_PACK_INDI_HEADER ->
+                            Total = binary:part(MsgBody, 20, 2),
+                            <<TotalInt:16>> = Total,
+                            Index = binary:part(MsgBody, 22, 2),
+                            <<IndexInt:16>> = Index,
+                            Tail = binary:part(MsgBody, 24, MsgLen-24),
+                            Msg = vdr_data_processor:create_final_msg(ID, Tel, FlowIdx, Tail, TotalInt, IndexInt),
+                            do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State);
+                        true ->
+                            Msg = vdr_data_processor:create_final_msg(ID, Tel, FlowIdx, MsgBody),
+                            do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State)
+                    end;
+                true ->
+                    %common:loginfo("2"),
+                    Msg = vdr_data_processor:create_final_msg(ID, Tel, FlowIdx, MsgBody),
+                    %common:loginfo("4"),
+                    do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State)
+            end;
+        _ ->
+            try
+                MsgBodyBin = list_to_binary(MsgBody),
+                MsgLen = byte_size(MsgBody),
+                MsgBodyTypeBytes = binary:part(MsgBodyBin, MsgLen-3, 2),
+                if
+                    ID == 16#8001 ->
+                        if
+                            MsgBodyTypeBytes =/= <<2,0>> andalso MsgBodyTypeBytes =/= <<0,2>> andalso MsgBodyTypeBytes =/= <<1,2>> ->
+                                common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, MsgType ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBodyTypeBytes, MsgBody]);
+                            true ->
+                                ok
+                        end;
+                    true ->
+                        common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBody])
+                end
+            catch
+                _:_ ->
+                    ok
+            end,
+            Msg = vdr_data_processor:create_final_msg(ID, Tel, FlowIdx, MsgBody),
+            do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State)
+    end.
+
+do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State) ->
+    case is_list(Msg) of
+        true ->
+            do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State);
+        _ ->
+            case is_binary(Msg) of
+                true ->
+                    if
+                        Msg == <<>> andalso ID =/= 16#8702 ->
+                            common:loginfo("~p send_data_to_vdr NULL final message : ID (~p), FlowIdx (~p), Msg (~p)", [Pid, ID, FlowIdx, Msg]);
+                        Msg == <<>> andalso ID == 16#8702 ->
+                            do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State),
+                            get_new_flow_index(FlowIdx);
+                        Msg =/= <<>> ->
+                            do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State),
+                            get_new_flow_index(FlowIdx)
+                    end;
+                _ ->
+                    FlowIdx
+            end
+    end.
+
+do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State) when is_binary(Msg),
+                                                        byte_size(Msg) > 0 ->
+    LinkPid ! {Pid, vdrmsgsent},
+    try
+        MsgResult1 = binary:replace(Msg, <<125,1>>, <<255,254,253,252,251,250,251,252,253,254,255>>, [global]),
+        FinalMsgResult1 = binary:replace(MsgResult1, <<125,2>>, <<245,244,243,242,241,240,241,242,243,244,245>>, [global]),
+        MsgResult = binary:replace(FinalMsgResult1, <<255,254,253,252,251,250,251,252,253,254,255>>, <<125>>, [global]),
+        FinalMsgResult = binary:replace(MsgResult, <<245,244,243,242,241,240,241,242,243,244,245>>, <<126>>, [global]),
+        FinalMsgResultLen = byte_size(FinalMsgResult),
+        MsgTypeBytes = binary:part(FinalMsgResult, 1, 2),
+        if
+            MsgTypeBytes == <<128, 1>> ->
+                MsgRespTypeBytes = binary:part(FinalMsgResult, FinalMsgResultLen-5, 2),
+                if
+                    MsgRespTypeBytes =/= <<2,0>> andalso MsgRespTypeBytes =/= <<0,2>> andalso MsgRespTypeBytes =/= <<1,2>> ->
+                        common:loginfo("Msg2VDR(~p, ~p) : ~p", [MsgTypeBytes, MsgRespTypeBytes, Msg]);
+                    true ->
+                        ok
+                end;
+            true ->
+                common:loginfo("Msg2VDR(~p) : ~p", [MsgTypeBytes, Msg])
+        end
+    catch
+        _:_ ->
+            ok
+    end,
+    %common:loginfo("=>VDR : begin"),
+    %safe_save_msg_4_vdr(Msg, State, false),
+    %common:loginfo("=>VDR : ~p", [Msg]),
+    save_msg_4_vdr(State, false, Msg),
+    try
+        %common:loginfo("Socket : ~p", [Socket]),
+        gen_tcp:send(Socket, Msg)
+    catch
+        _:_ ->
+            try
+                gen_tcp:close(Socket)
+            catch
+                _:_ ->
+                    ok
+            end
+    end;
+    %VDRPid ! {Pid, Socket, Msg, noresp};
+do_send_msg2vdr(_Pid, _Socket, Msg, _LinkPid, _State) when is_binary(Msg),
+                                                          byte_size(Msg) < 1 ->
+    ok;
+do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State) when is_list(Msg),
+                                                       length(Msg) > 0 ->
+    [H|T] = Msg,
+    LinkPid ! {Pid, vdrmsgsent},
+    try
+        HResult1 = binary:replace(H, <<125,1>>, <<255,254,253,252,251,250,251,252,253,254,255>>, [global]),
+        FinalHResult1 = binary:replace(HResult1, <<125,2>>, <<245,244,243,242,241,240,241,242,243,244,245>>, [global]),
+        HResult = binary:replace(FinalHResult1, <<255,254,253,252,251,250,251,252,253,254,255>>, <<125>>, [global]),
+        FinalHResult = binary:replace(HResult, <<245,244,243,242,241,240,241,242,243,244,245>>, <<126>>, [global]),
+        FinalHResultLen = byte_size(FinalHResult),
+        HTypeBytes = binary:part(FinalHResult, 1, 2),
+        if
+            HTypeBytes == <<128, 1>> ->
+                HRespTypeBytes = binary:part(H, FinalHResultLen-5, 2),
+                if
+                    HRespTypeBytes =/= <<2,0>> andalso HRespTypeBytes =/= <<0,2>> andalso HRespTypeBytes =/= <<1,2>> ->
+                        common:loginfo("Msg2VDR(~p, ~p) : ~p", [HTypeBytes, HRespTypeBytes, H]);
+                    true ->
+                        ok
+                end;
+            true ->
+                common:loginfo("Msg2VDR(~p) : ~p", [HTypeBytes, H])
+        end
+    catch
+        _:_ ->
+            ok
+    end,
+    %common:loginfo("=>VDR : begin"),
+    %safe_save_msg_4_vdr(H, State, false),
+    %common:loginfo("=>VDR : ~p", [H]),
+    save_msg_4_vdr(State, false, Msg),
+    try
+        %common:loginfo("Socket : ~p", [Socket]),
+        gen_tcp:send(Socket, H)
+    catch
+        _:_ ->
+            try
+                gen_tcp:close(Socket)
+            catch
+                _:_ ->
+                    ok
+            end
+    end,
+    %VDRPid ! {Pid, Socket, H, noresp},
+    do_send_msg2vdr(Pid, Socket, T, LinkPid, State);
+do_send_msg2vdr(_Pid, _Socket, Msg, _LinkPid, _State) when is_list(Msg),
+                                                          length(Msg) < 1 ->
+    ok;
+do_send_msg2vdr(_Pid, _Socket, _Msg, _LinkPid, _State) ->
+    ok.
+
+get_new_flow_index(FlowIdx) ->
+    NewFlowIdx = FlowIdx + 1,
+    NewFlowIdxRem = NewFlowIdx rem ?WS2VDRFREQ,
+    case NewFlowIdxRem of
+        0 ->
+            NewFlowIdx + 1;
+        _ ->
+            FlowIdxRem = FlowIdx rem ?WS2VDRFREQ,
+            case FlowIdxRem of
+                0 ->
+                    FlowIdx + ?WS2VDRFREQ;
+                _ ->
+                    NewFlowIdx
+            end
+    end.
+
