@@ -218,14 +218,19 @@ handle_info({tcp, Socket, Data}, PrevState) ->
         [] ->
 			common:send_stat_err(State, ?CONN_STAT_SPLIT_ERR),
             ErrCount = State#vdritem.errorcount + 1,
-            common:loginfo("VDR (~p) data empty : continous error count is ~p (max is ~p)", 
-                           [State#vdritem.addr,
-                            ErrCount,
-                            ?MAX_VDR_ERR_COUNT]),
+            log:logerror("~p : Data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : Empty splitted data.",
+                           [self(),
+                            MidState#vdritem.addr, 
+                            MidState#vdritem.id, 
+                            MidState#vdritem.serialno, 
+                            MidState#vdritem.auth, 
+                            MidState#vdritem.vehicleid, 
+                            MidState#vdritem.vehiclecode, 
+                            MidState#vdritem.driverid]),
             if
                 ErrCount >= ?MAX_VDR_ERR_COUNT ->
-					common:send_stat_err(State, errdisc),
-					common:send_stat_err(State, gwstop),
+					common:send_stat_err(State, ?CONN_STAT_DISC_ERR_CNT),
+					common:send_stat_err(State, ?CONN_STAT_DISC_GW),
                     {stop, vdrerror, State#vdritem{errorcount=ErrCount}};
                 true ->
                     set_sock_opts(Socket),
@@ -233,13 +238,26 @@ handle_info({tcp, Socket, Data}, PrevState) ->
             end;    
         _ ->
             case process_vdr_msges(Socket, Msgs, State) of
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                % Should revisit here for error message definitions
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 {error, vdrerror, NewState} ->
                     ErrCount = NewState#vdritem.errorcount + 1,
-                    common:loginfo("VDR (~p) data error : continous count is ~p (max is 3)", [NewState#vdritem.addr, ErrCount]),
+                    log:logerror("~p : Wrong data from VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : ~p.",
+                                   [self(),
+                                    MidState#vdritem.addr, 
+                                    MidState#vdritem.id, 
+                                    MidState#vdritem.serialno, 
+                                    MidState#vdritem.auth, 
+                                    MidState#vdritem.vehicleid, 
+                                    MidState#vdritem.vehiclecode, 
+                                    MidState#vdritem.driverid,
+                                    Msgs]),
+                    common:send_stat_err(State, ?CONN_STAT_UNK_ERR),
                     if
                         ErrCount >= ?MAX_VDR_ERR_COUNT ->
-							common:send_stat_err(State, errdisc),
-							common:send_stat_err(State, gwstop),
+                            common:send_stat_err(State, ?CONN_STAT_DISC_ERR_CNT),
+							common:send_stat_err(State, ?CONN_STAT_DISC_GW),
                             {stop, vdrerror, NewState#vdritem{errorcount=ErrCount}};
                         true ->
                             set_sock_opts(Socket),
@@ -248,27 +266,27 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                 {error, ErrType, NewState} ->
 					if
 						ErrType == charerror ->
-							common:send_stat_err(State, chardisc);
+							common:send_stat_err(State, ?CONN_STAT_DISC_CHAR);
 						ErrType == regerror ->
-							common:send_stat_err(State, regdisc);
+							common:send_stat_err(State, ?CONN_STAT_DISC_REG);
 						ErrType == autherror ->
-							common:send_stat_err(State, authdisc);
+							common:send_stat_err(State, ?CONN_STAT_DISC_AUTH);
 						ErrType == unautherror ->
-							common:send_stat_err(State, unauthdisc);
+							common:send_stat_err(State, ?CONN_STAT_DISC_UNAUTH);
 						ErrType == invalidmsgerror ->
-							common:send_stat_err(State, invalidmsgerror);
+							common:send_stat_err(State, ?CONN_STAT_DISC_INVALID_MSG);
 						ErrType == exiterror ->
-							common:send_stat_err(State, exitdisc);
+							common:send_stat_err(State, ?CONN_STAT_DISC_UNREG);
 						ErrType == vdrerror ->
-							common:send_stat_err(State, vdrerror);
+							common:send_stat_err(State, ?CONN_STAT_DISC_MSG_ERR);
 						ErrType == unvdrerror ->
-							common:send_stat_err(State, unvdrerror);
+							common:send_stat_err(State, ?CONN_STAT_DISC_UNK_MSG_ERR);
 						ErrType == exception ->
-							common:send_stat_err(State, msgex);
+							common:send_stat_err(State, ?CONN_STAT_DISC_MSGEX);
 						true ->
-							common:send_stat_err(State, errdisc)
+							common:send_stat_err(State, ?CONN_STAT_DISC_UNK_ERR)
 					end,
-					common:send_stat_err(State, gwstop),
+					common:send_stat_err(State, ?CONN_STAT_DISC_GW),
                     {stop, ErrType, NewState};
                 {warning, NewState} ->
                     set_sock_opts(Socket),
@@ -279,45 +297,65 @@ handle_info({tcp, Socket, Data}, PrevState) ->
             end
     end;
 handle_info({tcp_closed, _Socket}, State) ->    
-	common:send_stat_err(State, clientdisc),
+    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : handle_info(timeout, State)) : tcp_closed", 
+               [self(),
+                State#vdritem.addr, 
+                State#vdritem.id, 
+                State#vdritem.serialno, 
+                State#vdritem.auth, 
+                State#vdritem.vehicleid, 
+                State#vdritem.vehiclecode, 
+                State#vdritem.driverid]),
+	common:send_stat_err(State, ?CONN_STAT_DISC_CLI),
 	{stop, tcp_closed, State};
 handle_info(timeout, State) ->
-	common:send_stat_err(State, vdrtimeout),
+    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : handle_info(timeout, State)) : Timeout", 
+               [self(),
+                State#vdritem.addr, 
+                State#vdritem.id, 
+                State#vdritem.serialno, 
+                State#vdritem.auth, 
+                State#vdritem.vehicleid, 
+                State#vdritem.vehiclecode, 
+                State#vdritem.driverid]),
+	common:send_stat_err(State, ?CONN_STAT_DISC_TIMEOUT),
 	{stop, vdrtimeout, State};
 handle_info(Info, State) ->   
-	common:loginfo("~p handle_info UNKNWON STATE : ~p", [self(), Info]),
-	{stop, unknown, State}. 
+    log:logerr("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : handle_info(Info ~p, State)) : Unknown", 
+               [self(),
+                State#vdritem.addr, 
+                State#vdritem.id, 
+                State#vdritem.serialno, 
+                State#vdritem.auth, 
+                State#vdritem.vehicleid, 
+                State#vdritem.vehiclecode, 
+                State#vdritem.driverid,
+                Info]),
+	{stop, unknown, State}.
 
-%%%
-%%% When VDR handler process is terminated, do the clean jobs here
-%%%
-terminate(_Reason, State) ->
-	common:loginfo("~p terminate", [self()]),
-	Pid = State#vdritem.pid,
-    VehicleID = State#vdritem.vehicleid,
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% When VDR handler process is terminated, do the clean jobs here
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+terminate(Reason, State) ->
+	log:loginfo("~p : VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p, driverid:~p) : terminate(Reason ~p, State)",
+               [self(),
+                State#vdritem.addr, 
+                State#vdritem.id, 
+                State#vdritem.serialno, 
+                State#vdritem.auth, 
+                State#vdritem.vehicleid, 
+                State#vdritem.vehiclecode, 
+                State#vdritem.driverid,
+                Reason]),
     Socket = State#vdritem.socket,
     VDRTablePid = State#vdritem.vdrtablepid,
-	DBPid = State#vdritem.dbpid,
-	LinkPid = State#vdritem.linkpid,
     case Socket of
         undefined ->
             ok;
         _ ->
-            common:send_vdr_table_operation(VDRTablePid, {Pid, delete, Socket, noresp})
-    end,
-    case VehicleID of
-        undefined ->
-            ok;
-        _ ->
-			case DBPid of
-				undefined ->
-					ok;
-				_ ->
-					DBPid ! {self(), offline, VehicleID},
-					LinkPid ! {Pid, dbmsgstored, 1}
-			end,
-            {ok, WSUpdate} = wsock_data_parser:create_term_offline([VehicleID]),
-            send_msg_to_ws_nowait(WSUpdate, State)
+            common:send_vdr_table_operation(VDRTablePid, {delete, Socket})
     end,
 	try gen_tcp:close(State#vdritem.socket)
     catch

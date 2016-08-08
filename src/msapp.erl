@@ -246,9 +246,16 @@ vdr_log_process(VDRList) ->
             Len = length(VDRInclList),
             if
                 Len =:= 1 ->
-                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime)
-            end,
-            vdr_log_process(VDRList);
+                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime),
+                    vdr_log_process(VDRList);
+                Len > 1 ->
+                    VDRExclList = [C || C <- VDRList, C =/= VDRID],
+                    NewVDRList = lists:merge([VDRExclList, [VDRID]]),
+                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime),
+                    vdr_log_process(NewVDRList);
+                true ->
+                    vdr_log_process(VDRList)
+            end;
         _ ->
             log:loghint("VDR log process : unknown message"),
             vdr_log_process(VDRList)
