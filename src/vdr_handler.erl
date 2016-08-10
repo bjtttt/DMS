@@ -281,6 +281,13 @@ terminate(Reason, State) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Description :
+% Parameter :
+%       Type        : all|none|info|hint|error
+%       State       :
+%       FormatEx    :
+%       DataEx      :
+%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
                                            is_list(DataEx) ->

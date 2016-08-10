@@ -36,19 +36,15 @@ process_data(State, Data) ->
     catch
         _:Why ->
             [ST] = erlang:get_stacktrace(),
-            common:logerr("Parsing VDR data exception : ~p~n~p~nStack trace :~n~p", [Why, Data, ST]),
+            vdr_handler:logvdr(error, State, "parsing VDR data exception : ~p~ndata : ~p~nstack trace : ~p", [Why, Data, ST]),
             {error, exception, State}
     end.
 
+get_data_binary(Data) when is_list(Data)->
+    [BinData] = Data,
+    BinData;
 get_data_binary(Data) ->
-    IsList = is_list(Data),
-    if
-        IsList == true ->
-            [BinData] = Data,
-            BinData;
-        true ->
-            Data
-    end.
+    Data.
 
 %%%
 %%% Internal usage for parse_data(Socket, State, Data)
@@ -123,13 +119,7 @@ do_process_data(State, Data) ->
                                                 BodyLen == ActBodyLen ->
                                                     case combine_msg_packs(State, ID, MsgIdx, Total, Index, Body) of
                                                         {complete, Msg, NewState} ->
-															common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nMsg packages is combined successfully (ID :~p)", 
-																		   [State#vdritem.addr,
-																			State#vdritem.id,
-																			State#vdritem.serialno,
-																			State#vdritem.auth,
-																			State#vdritem.vehicleid,
-																			State#vdritem.vehiclecode, ID]),
+                                                            vdr_handler:logvdr(info, State, "combined MSG (ID ~p): ~p", [ID, Msg]),
                                                             case vdr_data_processor:parse_msg_body(ID, Msg) of
                                                                 {ok, Result} ->
                                                                     {ok, HeadInfo, Result, NewState};
@@ -195,7 +185,7 @@ restore_7d_7e_msg(State, Data) ->
 		    FinalResult = binary:replace(Result, <<245,244,243,242,241,240,241,242,243,244,245>>, <<126>>, [global]),
             {ok, FinalResult};
         true ->
-            common:loginfo("Wrong data head/tail from ~p~n: (Head)~p / (Tail)~p",[State#vdritem.addr, Head, Tail]),
+            vdr_handler:logvdr(error, State, "wrong data head/tail : Head : ~p / Tail : ~p",[Head, Tail]),
             error
     end.
 
@@ -225,7 +215,7 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
     		NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
-			case check_ignored_msg(MsgWithID, MsgIdx, Total, Idx) of
+			case check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) of
 				new ->
 					NewMsgWithID = [[ID, MsgIdx, Total, Idx, Body]],
 		            case check_msg(NewMsgWithID, Total) of
@@ -429,16 +419,17 @@ calc_missing_pack_msgidxs(MissingIdxs, LastMsgIdx, LastIdx) when is_list(Missing
 calc_missing_pack_msgidxs(_MissingIdxs, _LastMsgIdx, _LastIdx) ->
     [].
 
-check_ignored_msg(MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
-													  length(MsgWithID) > 0,
-													  is_integer(MsgIdx),
-													  is_integer(Total),
-													  is_integer(Idx),
-													  Total >= Idx ->
+check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
+                                                             length(MsgWithID) > 0,
+                                                             is_integer(MsgIdx),
+                                                             is_integer(Total),
+                                                             is_integer(Idx),
+                                                             Total >= Idx ->
 	[H|_T] = MsgWithID,
 	[_ID, HMsgIdx, HTotal, HIdx, _Body] = H,
-	common:loginfo("Header msg : MsgIdx ~p, Total ~p, Index ~p~nReceived msg : MsgIdx ~p, Total ~p, Index ~p",
-				   [HMsgIdx, HTotal, HIdx, MsgIdx, Total, Idx]),
+	vdr_handler:logvdr(info, State, 
+                       "header MSG : MsgIdx ~p, Total ~p, Index ~p~nReceived msg : MsgIdx ~p, Total ~p, Index ~p",
+                       [HMsgIdx, HTotal, HIdx, MsgIdx, Total, Idx]),
 	if
 		HTotal =/= Total ->
 			true;
