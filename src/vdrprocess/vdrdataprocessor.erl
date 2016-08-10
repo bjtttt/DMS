@@ -22,7 +22,7 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 process_vdr_data(Socket, Data, State) -> 
-    %common:loginfo("Driver ID when MSG : ~p", [State#vdritem.driverid]),
+    vdr_handler:logvdr(all, State, "data ~p", Data),
     case vdr_data_parser:process_data(State, Data) of
         {ok, HeadInfo, Msg, NewStateOrigin} ->
             %common:loginfo("New Driver ID when MSG : ~p", [NewState#vdritem.driverid]),
@@ -37,182 +37,165 @@ process_vdr_data(Socket, Data, State) ->
                             % Not complete
                             % Register VDR
                             %{Province, City, Producer, TermModel, TermID, LicColor, LicID} = Msg,
-                            case create_sql_from_vdr(HeadInfo, Msg, NewState) of
-                                {ok, Sql} ->
-                                    SqlResp = send_sql_to_db(conn, Sql, NewState),
-                                    % 0 : ok
-                                    % 1 : vehicle registered
-                                    % 2 : no such vehicle in DB
-                                    % 3 : VDR registered
-                                    % 4 : no such VDR in DB
-                                    case extract_db_resp(SqlResp) of
-                                        {ok, empty} -> % No vehicle and no VDR. However, only reply no vehicle here.
+                            VehicleID = undefined,
+                            DeviceID = undefined,
+                            if
+                                VehicleID == undefined andalso DeviceID == undefined -> % No vehicle or no VDR
+                                    if
+                                        VehicleID == undefined ->
                                             FlowIdx = NewState#vdritem.msgflownum,
                                             MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 2, empty),
-                                            common:loginfo("~p sends VDR (~p) registration response (no such vechile in DB) : ~p", [NewState#vdritem.pid, State#vdritem.addr, MsgBody]),
+                                            common:loginfo("~p sends VDR (~p) registration response (no such vechile in DB) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
                                             NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
                                             
                                             % return error to terminate VDR connection
                                             {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                        {ok, [Rec]} ->
-                                            % "id" is PK, so it cannot be null or undefined
-                                            {<<"device">>, <<"id">>, DeviceID} = get_record_field(<<"device">>, Rec, <<"id">>),
-                                            % "serial_no" is the query condition and NOT NULL & UNIQUE, so it cannot be null or undefined
-                                            %{<<"device">>, <<"serial_no">>, DeviceSerialNo} = get_record_field(<<"device">>, Rec, <<"serial_no">>),
-                                            {<<"device">>, <<"authen_code">>, DeviceAuthenCode} = get_record_field(<<"device">>, Rec, <<"authen_code">>),
-                                            {<<"device">>, <<"vehicle_id">>, DeviceVehicleID} = get_record_field(<<"device">>, Rec, <<"vehicle_id">>),
-                                            {<<"device">>, <<"reg_time">>, DeviceRegTime} = get_record_field(<<"device">>, Rec, <<"reg_time">>),
-                                            % "id" is PK, so it cannot be null or undefined
-                                            {<<"vehicle">>, <<"id">>, VehicleID} = get_record_field(<<"vehicle">>, Rec, <<"id">>),
-                                            % "code" is the query condition and NOT NULL & UNIQUE, so it cannot be null or undefined
-                                            {<<"vehicle">>, <<"code">>, _VehicleCode} = get_record_field(<<"vehicle">>, Rec, <<"code">>),
-                                            {<<"vehicle">>, <<"device_id">>, VehicleDeviceID} = get_record_field(<<"vehicle">>, Rec, <<"device_id">>),
-                                            {<<"vehicle">>, <<"dev_install_time">>, VehicleDeviceInstallTime} = get_record_field(<<"vehicle">>, Rec, <<"dev_install_time">>),
-                                            if
-                                                VehicleID == undefined orelse DeviceID == undefined -> % No vehicle or no VDR
-                                                    if
-                                                        VehicleID == undefined ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 2, empty),
-                                                            common:loginfo("~p sends VDR (~p) registration response (no such vechile in DB) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                                        true -> % DeviceID == undefined ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 4, empty),
-                                                            common:loginfo("~p sends VDR (~p) registration response (no such VDR in DB) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}}
-                                                    end;
-                                                VehicleDeviceID =/= undefined andalso DeviceVehicleID =/= undefined -> % Vehicle registered and VDR registered
-                                                    if
-                                                        VehicleDeviceID =/= DeviceID ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 1, empty),
-                                                            common:loginfo("~p sends VDR (~p) registration response (vehicle registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                                        DeviceVehicleID =/= VehicleID ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 3, empty),
-                                                            common:loginfo("~p sends VDR (~p) registration response (VDR registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                                        true ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            case is_binary(DeviceAuthenCode) of
-                                                                true ->
-                                                                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, DeviceAuthenCode),
-                                                                    %common:loginfo("~p sends VDR registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, VehicleCode, MsgBody]),
-                                                                    NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                                    
-                                                                    update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
-                                                                    
-                                                                    % return error to terminate VDR connection
-                                                                    {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}};
-                                                                false ->
-                                                                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
-                                                                    %common:loginfo("~p sends VDR registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, VehicleCode, MsgBody]),
-                                                                    NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                                    
-                                                                    update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
-                                                                    
-                                                                    % return error to terminate VDR connection
-                                                                    {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], tel=Tel}}
-                                                            end
-                                                    end;
-                                                VehicleDeviceID =/= undefined andalso DeviceVehicleID == undefined -> % Vehicle registered
-                                                    if
-                                                        VehicleDeviceID =/= DeviceID ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 1, empty),
-                                                            common:loginfo("~p sends VDR (~p) registration response (vehicle registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                                        true ->
-                                                            VDRVehicleIDSql = list_to_binary([<<"update device set vehicle_id='">>,
-                                                                                              common:integer_to_binary(VehicleID),
-                                                                                              <<"' where id=">>,
-                                                                                              common:integer_to_binary(DeviceID)]),
-                                                            % Should we check the update result?
-                                                            send_sql_to_db_nowait(conn, VDRVehicleIDSql, NewState),
-                                                            
-                                                            update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
-
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
-                                                            %common:loginfo("~p sends VDR (~p) registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, VehicleCode, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}}
-                                                    end;
-                                                VehicleDeviceID == undefined andalso DeviceVehicleID =/= undefined -> % Vehicle registered
-                                                    if
-                                                        DeviceVehicleID =/= VehicleID ->
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 3, empty),
-                                                            common:loginfo("~p sends VDR (~p) registration response (VDR registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-                                                            
-                                                            % return error to terminate VDR connection
-                                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                                        true ->
-                                                            VehicleVDRIDSql = list_to_binary([<<"update vehicle set device_id='">>,
-                                                                                              common:integer_to_binary(DeviceID),
-                                                                                              <<"' where id=">>,
-                                                                                              common:integer_to_binary(VehicleID)]),
-                                                            send_sql_to_db_nowait(conn, VehicleVDRIDSql, NewState),
-                                                            
-                                                            update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
-
-                                                            FlowIdx = NewState#vdritem.msgflownum,
-                                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
-                                                            %common:loginfo("~p sends VDR (~p) registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, VehicleCode, MsgBody]),
-                                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-
-                                                            % return error to terminate VDR connection
-                                                            {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}}
-                                                    end;
-                                                VehicleDeviceID == undefined andalso DeviceVehicleID == undefined ->
-                                                    VDRVehicleIDSql = list_to_binary([<<"update device set vehicle_id='">>,
-                                                                                      common:integer_to_binary(VehicleID),
-                                                                                      <<"' where id=">>,
-                                                                                      common:integer_to_binary(DeviceID)]),
-                                                    send_sql_to_db_nowait(conn, VDRVehicleIDSql, NewState),
-                                                    
-                                                    VehicleVDRIDSql = list_to_binary([<<"update vehicle set device_id='">>,
-                                                                                      common:integer_to_binary(DeviceID),
-                                                                                      <<"' where id=">>,
-                                                                                      common:integer_to_binary(VehicleID)]),
-                                                    send_sql_to_db_nowait(conn, VehicleVDRIDSql, NewState),
-
-                                                    update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),      
-
-                                                    FlowIdx = NewState#vdritem.msgflownum,
-                                                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
-                                                    %common:loginfo("~p sends VDR (~p) registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, VehicleCode, MsgBody]),
+                                        true -> % DeviceID == undefined ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 4, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (no such VDR in DB) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}}
+                                    end;
+                                VehicleID == undefined orelse DeviceID == undefined -> % No vehicle or no VDR
+                                    if
+                                        VehicleID == undefined ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 2, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (no such vechile in DB) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
+                                        true -> % DeviceID == undefined ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 4, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (no such VDR in DB) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}}
+                                    end;
+                                VehicleID =/= undefined andalso DeviceID =/= undefined -> % Vehicle registered and VDR registered
+                                    if
+                                        VehicleDeviceID =/= DeviceID ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 1, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (vehicle registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
+                                        DeviceVehicleID =/= VehicleID ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 3, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (VDR registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
+                                        true ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            case is_binary(DeviceAuthenCode) of
+                                                true ->
+                                                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, DeviceAuthenCode),
+                                                    %common:loginfo("~p sends VDR registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, VehicleCode, MsgBody]),
                                                     NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
                                                     
+                                                    update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
+                                                    
+                                                    % return error to terminate VDR connection
                                                     {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}};
-                                                true -> % Impossible condition
-                                                    {error, regerror, NewState}
-                                            end;
-                                        _ ->
-                                            % 
-                                            {error, regerror, NewState}
+                                                false ->
+                                                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
+                                                    %common:loginfo("~p sends VDR registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, VehicleCode, MsgBody]),
+                                                    NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                                    
+                                                    update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
+                                                    
+                                                    % return error to terminate VDR connection
+                                                    {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], tel=Tel}}
+                                            end
                                     end;
-                                _ ->
+                                VehiclID =/= undefined andalso DeviceID == undefined -> % Vehicle registered
+                                    if
+                                        VehicleDeviceID =/= DeviceID ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 1, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (vehicle registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
+                                        true ->
+                                            VDRVehicleIDSql = list_to_binary([<<"update device set vehicle_id='">>,
+                                                                              common:integer_to_binary(VehicleID),
+                                                                              <<"' where id=">>,
+                                                                              common:integer_to_binary(DeviceID)]),
+                                            % Should we check the update result?
+                                            send_sql_to_db_nowait(conn, VDRVehicleIDSql, NewState),
+                                            
+                                            update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
+
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
+                                            %common:loginfo("~p sends VDR (~p) registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, VehicleCode, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}}
+                                    end;
+                                VehicleID == undefined andalso VehicleID =/= undefined -> % Vehicle registered
+                                    if
+                                        DeviceVehicleID =/= VehicleID ->
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 3, empty),
+                                            common:loginfo("~p sends VDR (~p) registration response (VDR registered) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                            
+                                            % return error to terminate VDR connection
+                                            {error, regerror, NewState#vdritem{msgflownum=NewFlowIdx}};
+                                        true ->
+                                            VehicleVDRIDSql = list_to_binary([<<"update vehicle set device_id='">>,
+                                                                              common:integer_to_binary(DeviceID),
+                                                                              <<"' where id=">>,
+                                                                              common:integer_to_binary(VehicleID)]),
+                                            send_sql_to_db_nowait(conn, VehicleVDRIDSql, NewState),
+                                            
+                                            update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),        
+
+                                            FlowIdx = NewState#vdritem.msgflownum,
+                                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
+                                            %common:loginfo("~p sends VDR (~p) registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, VehicleCode, MsgBody]),
+                                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+
+                                            % return error to terminate VDR connection
+                                            {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}}
+                                    end;
+                                VehicleID == undefined andalso VehicleID == undefined ->
+                                    VDRVehicleIDSql = list_to_binary([<<"update device set vehicle_id='">>,
+                                                                      common:integer_to_binary(VehicleID),
+                                                                      <<"' where id=">>,
+                                                                      common:integer_to_binary(DeviceID)]),
+                                    send_sql_to_db_nowait(conn, VDRVehicleIDSql, NewState),
+                                    
+                                    VehicleVDRIDSql = list_to_binary([<<"update vehicle set device_id='">>,
+                                                                      common:integer_to_binary(DeviceID),
+                                                                      <<"' where id=">>,
+                                                                      common:integer_to_binary(VehicleID)]),
+                                    send_sql_to_db_nowait(conn, VehicleVDRIDSql, NewState),
+
+                                    update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, NewState),      
+
+                                    FlowIdx = NewState#vdritem.msgflownum,
+                                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(DeviceAuthenCode)),
+                                    %common:loginfo("~p sends VDR (~p) registration response (ok) (vehicle code : ~p) : ~p", [NewState#vdritem.pid, NewState#vdritem.addr, VehicleCode, MsgBody]),
+                                    NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+                                    
+                                    {ok, NewState#vdritem{msgflownum=NewFlowIdx, msg2vdr=[], msg=[], req=[], alarm=0, alarmlist=[], state=0, statelist=[], tel=Tel}};
+                                true -> % Impossible condition
                                     {error, regerror, NewState}
                             end;
                         16#102 ->
@@ -737,23 +720,17 @@ process_vdr_data(Socket, Data, State) ->
                             {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
                         16#801 ->
                             {MediaId, _Type, _Code, _EICode, _PipeId, _PosInfo, _Pack} = Msg,
-                            case create_sql_from_vdr(HeadInfo, Msg, NewState) of
-                                {ok, Sqls} ->
-                                    send_sqls_to_db_nowait(conn, Sqls, NewState),
 
-                                    FlowIdx = NewState#vdritem.msgflownum,
-                                    MsgBody = vdr_data_processor:create_multimedia_data_reply(MediaId),
-                                    NewFlowIdx = send_data_to_vdr(16#8800, Tel, FlowIdx, MsgBody, NewState),
-                                    
-                                    [VDRItem] = ets:lookup(vdrtable, Socket),
-                                    VDRTablePid = VDRItem#vdritem.vdrtablepid,
-                                    NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
-                                    common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
-                                    
-                                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                                _ ->
-                                    {error, vdrerror, NewState}
-                            end;                                
+                            FlowIdx = NewState#vdritem.msgflownum,
+                            MsgBody = vdr_data_processor:create_multimedia_data_reply(MediaId),
+                            NewFlowIdx = send_data_to_vdr(16#8800, Tel, FlowIdx, MsgBody, NewState),
+                            
+                            [VDRItem] = ets:lookup(vdrtable, Socket),
+                            VDRTablePid = VDRItem#vdritem.vdrtablepid,
+                            NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
+                            common:send_vdr_table_operation(VDRTablePid, {insert, NewVDRItem}),
+                            
+                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
                        16#805 ->
                             {_RespIdx, Res, _ActLen, List} = Msg,
 
@@ -1450,257 +1427,7 @@ get_certcode_for_sql(CertCode) ->
         true ->
             CertCode
     end.
-
-create_sql_from_vdr(HeaderInfo, Msg, State) ->
-    create_sql_from_vdr(HeaderInfo, Msg, [], State).
  
-%%%         
-%%% Return :
-%%%     {ok, SQL|[SQL0, SQL1, ...]}
-%%%     {error, iderror}
-%%%     error
-%%%
-create_sql_from_vdr(HeaderInfo, Msg, Address, State) ->
-    {ID, _FlowNum, TelNum, _CryptoType} = HeaderInfo,
-    case ID of
-        16#1    ->
-            {ok, ""};
-        16#2    ->                          
-            {ok, ""};
-        16#100  ->          % Not complete, currently only use VDRSerialNo&VehicleID for query                     
-            {_Province, _City, _Producer, _VDRModel, _VDRSerialNo, _VehicleColor, _VehicleID} = Msg,
-            <<Num0:8, Num1:8, Num2:8, Num3:8, Num4:8, Num5:8>> = <<TelNum:48>>,
-            TelBin = list_to_binary([common:integer_to_binary(common:convert_bcd_integer(Num0)),
-                                     common:integer_to_2byte_binary(common:convert_bcd_integer(Num1)),
-                                     common:integer_to_2byte_binary(common:convert_bcd_integer(Num2)),
-                                     common:integer_to_2byte_binary(common:convert_bcd_integer(Num3)),
-                                     common:integer_to_2byte_binary(common:convert_bcd_integer(Num4)),
-                                     common:integer_to_2byte_binary(common:convert_bcd_integer(Num5))]),
-            SQL = list_to_binary([<<"select * from vehicle,device where device.iccid='">>,%serial_no='">>,
-                                  %list_to_binary(VDRSerialNo),
-                                  TelBin,
-                                  %<<"' and vehicle.code='">>,
-                                  %list_to_binary(VehicleID),
-                                  %<<"'">>]),
-                                  <<"' and vehicle.device_id=device.id">>]),
-            {ok, SQL};
-        16#3    ->                          
-            {ID, Auth} = Msg,
-            {ok, list_to_binary([<<"update device set reg_time=null where authen_code='">>, list_to_binary(Auth), <<"' or id='">>, list_to_binary(ID), <<"'">>])};
-        16#102  ->
-            {Auth} = Msg,
-            %{ok, list_to_binary([<<"select * from device left join vehicle on vehicle.device_id=device.id left join vehicle_alarm on vehicle.id=vehicle_alarm.vehicle_id where device.authen_code='">>, list_to_binary(Auth), <<"'">>])};
-            {ok, list_to_binary([<<"select * from device left join vehicle on vehicle.device_id=device.id where device.authen_code='">>, list_to_binary(Auth), <<"'">>])};
-        16#104  ->
-            {_RespIdx, _ActLen, _List} = Msg,
-            {ok, ""};
-        16#107  ->
-            {_Type, _ProId, _Model, _TerId, _ICCID, _HwVerLen, _HwVer, _FwVerLen, _FwVer, _GNSS, _Prop} = Msg,
-            {ok, ""};
-        16#108  ->    
-            {_Type, _Res} = Msg,
-            {ok, ""};
-        16#200 ->
-            create_pos_info_sql(Msg, Address, State);
-        16#201 ->
-            create_pos_info_sql(Msg, Address, State);
-        16#301  ->                          
-            {ok, ""};
-        16#302  ->
-            {ok, ""};
-        16#303  ->
-            {ok, ""};
-        16#500  ->
-            {ok, ""};
-        16#700  ->
-            {ok, ""};
-        16#701  ->
-            {ok, ""};
-        16#702  ->
-            %common:loginfo("Driver Cert Code 2 : ~p", [State#vdritem.drivercertcode]),
-            MsgSize = tuple_size(Msg),
-            if
-                MsgSize == 2 ->
-                    {DrvState, Time} = Msg,
-                        <<YY:8, MMon:8, DD:8, HH:8, MMin:8, SS:8>> = <<Time:48>>,
-                        Year = common:convert_bcd_integer(YY),
-                        Month = common:convert_bcd_integer(MMon),
-                        Day = common:convert_bcd_integer(DD),
-                        Hour = common:convert_bcd_integer(HH),
-                        Minute = common:convert_bcd_integer(MMin),
-                        Second = common:convert_bcd_integer(SS),
-                        YearS = common:integer_to_binary(Year),
-                        MonthS = common:integer_to_binary(Month),
-                        DayS = common:integer_to_binary(Day),
-                        HourS = common:integer_to_binary(Hour),
-                        MinuteS = common:integer_to_binary(Minute),
-                        SecondS = common:integer_to_binary(Second),
-                        TimeS = list_to_binary([YearS, <<"-">>, MonthS, <<"-">>, DayS, <<" ">>, HourS, <<":">>, MinuteS, <<":">>, SecondS]),
-                        SQL = list_to_binary([<<"insert into driver_record(vehicle_id, certificate_code, ontime, type) values(">>,
-                                              common:integer_to_binary(State#vdritem.vehicleid), <<", '">>,
-                                              get_certcode_for_sql(State#vdritem.drivercertcode), <<"', '">>,
-                                              TimeS, <<"', ">>,
-                                              common:integer_to_binary(DrvState), <<")">>]),
-                        {ok, SQL};
-                MsgSize == 3 ->
-                    {DrvState, Time, IcReadResult} = Msg,
-                        <<YY:8, MMon:8, DD:8, HH:8, MMin:8, SS:8>> = <<Time:48>>,
-                        Year = common:convert_bcd_integer(YY),
-                        Month = common:convert_bcd_integer(MMon),
-                        Day = common:convert_bcd_integer(DD),
-                        Hour = common:convert_bcd_integer(HH),
-                        Minute = common:convert_bcd_integer(MMin),
-                        Second = common:convert_bcd_integer(SS),
-                        YearS = common:integer_to_binary(Year),
-                        MonthS = common:integer_to_binary(Month),
-                        DayS = common:integer_to_binary(Day),
-                        HourS = common:integer_to_binary(Hour),
-                        MinuteS = common:integer_to_binary(Minute),
-                        SecondS = common:integer_to_binary(Second),
-                        TimeS = list_to_binary([YearS, <<"-">>, MonthS, <<"-">>, DayS, <<" ">>, HourS, <<":">>, MinuteS, <<":">>, SecondS]),
-                        SQL = list_to_binary([<<"insert into driver_record(vehicle_id, certificate_code, ontime, status, type) values(">>,
-                                              common:integer_to_binary(State#vdritem.vehicleid), <<", '">>,
-                                              get_certcode_for_sql(State#vdritem.drivercertcode), <<"', '">>,
-                                              TimeS, <<"', ">>,
-                                              common:integer_to_binary(IcReadResult), <<", ">>,
-                                              common:integer_to_binary(DrvState), <<")">>]),
-                        {ok, SQL};
-                MsgSize == 9 ->
-                    {DrvState, Time, IcReadResult, _NameLen, N, C, _OrgLen, O, Validity} = Msg,
-                    <<YY:8, MMon:8, DD:8, HH:8, MMin:8, SS:8>> = <<Time:48>>,
-                    Year = common:convert_bcd_integer(YY),
-                    Month = common:convert_bcd_integer(MMon),
-                    Day = common:convert_bcd_integer(DD),
-                    Hour = common:convert_bcd_integer(HH),
-                    Minute = common:convert_bcd_integer(MMin),
-                    Second = common:convert_bcd_integer(SS),
-                    YearS = common:integer_to_binary(Year),
-                    MonthS = common:integer_to_binary(Month),
-                    DayS = common:integer_to_binary(Day),
-                    HourS = common:integer_to_binary(Hour),
-                    MinuteS = common:integer_to_binary(Minute),
-                    SecondS = common:integer_to_binary(Second),
-                    TimeS = list_to_binary([YearS, <<"-">>, MonthS, <<"-">>, DayS, <<" ">>, HourS, <<":">>, MinuteS, <<":">>, SecondS]),
-                    <<YY1:16, MMon1:8, DD1:8>> = <<Validity:32>>,
-                    Year1 = common:convert_bcd_integer(YY1),
-                    Month1 = common:convert_bcd_integer(MMon1),
-                    Day1 = common:convert_bcd_integer(DD1),
-                    Year1S = common:integer_to_binary(Year1),
-                    Month1S = common:integer_to_binary(Month1),
-                    Day1S = common:integer_to_binary(Day1),
-                    ValidityS = list_to_binary([Year1S, <<"-">>, Month1S, <<"-">>, Day1S]),
-                    ONew = common:convert_gbk_to_utf8(O),
-                    NNew = common:convert_gbk_to_utf8(N),
-                    %common:loginfo("GBK Org : ~p", [common:get_str_bin_to_bin_list(O)]),
-                    %common:loginfo("UTF8 Org : ~p", [common:get_str_bin_to_bin_list(ONew)]),
-                    %common:loginfo("GBK Name : ~p", [common:get_str_bin_to_bin_list(N)]),
-                    %common:loginfo("UTF8 Name : ~p", [common:get_str_bin_to_bin_list(NNew)]),
-                    SQL = list_to_binary([<<"insert into driver_record(vehicle_id, certificate_code, remark, name, effectivedate, ontime, status, type) values(">>,
-                                          common:integer_to_binary(State#vdritem.vehicleid), <<", '">>,
-                                          list_to_binary(C), <<"', '">>,
-                                          list_to_binary(ONew), <<"', '">>,
-                                          list_to_binary(NNew), <<"', '">>,
-                                          ValidityS, <<"', '">>,
-                                          TimeS, <<"', ">>,
-                                          common:integer_to_binary(IcReadResult), <<", ">>,
-                                          common:integer_to_binary(DrvState), <<")">>]),
-                    {ok, SQL}
-            end;
-        16#704  ->
-            {ok, ""};
-        16#705  ->
-            {ok, ""};
-        16#800  ->
-            {ok, ""};
-        16#801  ->
-            {Id, Type, Code, EICode, PipeId, MsgBody, Pack} = Msg,
-            VehicleId = State#vdritem.vehicleid,
-            {ServerYear, ServerMonth, ServerDay} = erlang:date(),
-            {ServerHour, ServerMinute, ServerSecond} = erlang:time(),
-            ServerYearS = common:integer_to_binary(ServerYear),
-            ServerMonthS = common:integer_to_binary(ServerMonth),
-            ServerDayS = common:integer_to_binary(ServerDay),
-            ServerHourS = common:integer_to_binary(ServerHour),
-            ServerMinuteS = common:integer_to_binary(ServerMinute),
-            ServerSecondS = common:integer_to_binary(ServerSecond),
-            ServerTimeS = list_to_binary([ServerYearS, <<"-">>, ServerMonthS, <<"-">>, ServerDayS, <<" ">>, ServerHourS, <<":">>, ServerMinuteS, <<":">>, ServerSecondS]),
-            ServerTimeSFile = list_to_binary([ServerYearS, <<"_">>, ServerMonthS, <<"_">>, ServerDayS, <<"_">>, ServerHourS, <<"_">>, ServerMinuteS, <<"_">>, ServerSecondS]),
-            %file:write_file("media0", Pack),
-            %common:loginfo("Pack : ~p", [Pack]),
-            %Pack1 = binary:replace(Pack, <<39>>, <<255,254,253,252,251,250,251,252,253,254,255,254,253,252,251,250,251,252,253,254,255>>, [global]),
-            %common:loginfo("Pack1 : ~p", [Pack1]),
-            %Pack2 = binary:replace(Pack1, <<255,254,253,252,251,250,251,252,253,254,255,254,253,252,251,250,251,252,253,254,255>>, <<92,39>>, [global]),
-            %common:loginfo("Pack2 : ~p", [Pack2]),
-            %case file:make_dir("media") of
-            %   ok ->
-            %       common:loginfo("Successfully create directory media");
-            %   {error, DirError} ->
-            %       common:loginfo("Cannot create directory media : ~p", [DirError])
-            %end,
-            %case file:get_cwd() of
-            %   {ok, Dir} ->
-            %       common:loginfo("Current directory ~p", [Dir]);
-            %   {error, CwdError} ->
-            %       common:loginfo("Cannot get the current directory : ~p", [CwdError])
-            %end,
-            FileNameDB = common:combine_strings([integer_to_list(State#vdritem.tel), "_",
-                                                 binary_to_list(ServerTimeSFile), "_",
-                                                 integer_to_list(Id), "_",
-                                                 integer_to_list(Type), "_",
-                                                 integer_to_list(Code), "_",
-                                                 integer_to_list(EICode), "_",
-                                                 integer_to_list(PipeId), ".dat"], false),                                                                                      
-            [{path, Path}] = ets:lookup(msgservertable, path),
-            FileName = Path ++ common:combine_strings(["/media/",
-                                               integer_to_list(State#vdritem.tel), "_",
-                                               binary_to_list(ServerTimeSFile), "_",
-                                               integer_to_list(Id), "_",
-                                               integer_to_list(Type), "_",
-                                               integer_to_list(Code), "_",
-                                               integer_to_list(EICode), "_",
-                                               integer_to_list(PipeId), ".dat"], false),                                                                                        
-            case file:write_file(FileName, Pack) of
-                ok ->
-                    common:loginfo("Successfully save media file ~p", [FileName]);
-                {error, FileError} ->
-                    common:loginfo("Cannot save media file ~p : ~p", [FileName, FileError])
-            end,
-            %file:write_file("media1", Pack2),
-            %SQL = list_to_binary([<<"insert into record_media(vehicle_id, rec_time, mediadata, mediatype, mediaformat, mediaid, eventid, mediachannelid, file_name) values(">>,
-            %                    common:integer_to_binary(VehicleId), <<", '">>,
-            %                     ServerTimeS, <<"', '">>,
-            %                     Pack2, <<"', ">>,
-            %                     common:integer_to_binary(Type), <<", ">>,
-            %                     common:integer_to_binary(Code), <<", ">>,
-            %                     common:integer_to_binary(Id), <<", ">>,
-            %                     common:integer_to_binary(EICode), <<", ">>,
-            %                    common:integer_to_binary(PipeId), <<", '">>,
-            %                     list_to_binary(FileNameDB), <<"')">>]),
-            SQL = list_to_binary([<<"insert into record_media(vehicle_id, rec_time, mediatype, mediaformat, mediaid, eventid, mediachannelid, file_name) values(">>,
-                                  common:integer_to_binary(VehicleId), <<", '">>,
-                                  ServerTimeS, <<"', ">>,
-                                  common:integer_to_binary(Type), <<", ">>,
-                                  common:integer_to_binary(Code), <<", ">>,
-                                  common:integer_to_binary(Id), <<", ">>,
-                                  common:integer_to_binary(EICode), <<", ">>,
-                                  common:integer_to_binary(PipeId), <<", '">>,
-                                  list_to_binary(FileNameDB), <<"')">>]),
-            {ok, [SQL0, SQL1]} = create_pos_info_sql(MsgBody, Address, State),
-            {ok, [SQL, SQL0, SQL1]};
-        16#802  ->
-            {ok, ""};
-        16#805  ->
-            {ok, ""};
-        16#900 ->
-            {ok, ""};
-        16#901 ->
-            {ok, ""};
-        16#A00 ->
-            {ok, ""};
-        _ ->
-            {error, iderror}
-    end.
-
 get_driver_cert_code(State) ->
     CertCode = State#vdritem.drivercertcode,
     case CertCode of
@@ -1725,267 +1452,6 @@ get_driver_cc_by_vdr_auth_code(State, VDRAuthCode) ->
     after ?PROC_RESP_TIMEOUT ->
             undefined
     end.
-
-%create_pos_info_sql(Msg, State) ->
-%   create_pos_info_sql(Msg, [], State).
-
-create_pos_info_sql(Msg, Address, State) ->
-    CertCode = get_driver_cert_code(State),
-    case Msg of
-        {H, AppInfo} ->
-            [AlarmSym, StateFlag, Lat, Lon, Height, Speed, Direction, Time]= H,
-            AppInfo,
-            <<YY:8, MMon:8, DD:8, HH:8, MMin:8, SS:8>> = <<Time:48>>,
-            Year = common:convert_bcd_integer(YY),
-            Month = common:convert_bcd_integer(MMon),
-            Day = common:convert_bcd_integer(DD),
-            Hour = common:convert_bcd_integer(HH),
-            Minute = common:convert_bcd_integer(MMin),
-            Second = common:convert_bcd_integer(SS),
-            {ServerYear, ServerMonth, ServerDay} = erlang:date(),
-            {ServerHour, ServerMinute, ServerSecond} = erlang:time(),
-            YearS = common:integer_to_binary(Year),
-            MonthS = common:integer_to_binary(Month),
-            DayS = common:integer_to_binary(Day),
-            HourS = common:integer_to_binary(Hour),
-            MinuteS = common:integer_to_binary(Minute),
-            SecondS = common:integer_to_binary(Second),
-            TimeS = list_to_binary([YearS, <<"-">>, MonthS, <<"-">>, DayS, <<" ">>, HourS, <<":">>, MinuteS, <<":">>, SecondS]),
-            YearDB = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Year)),
-            MonthDB = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Month)),
-            DayDB = vdr_data_processor:get_2_number_integer_from_oct_string(integer_to_list(Day)),
-            DBBin = list_to_binary([common:integer_to_2byte_binary(YearDB),
-                                     common:integer_to_2byte_binary(MonthDB),
-                                     common:integer_to_2byte_binary(DayDB)]),
-            ServerYearS = common:integer_to_binary(ServerYear),
-            ServerMonthS = common:integer_to_binary(ServerMonth),
-            ServerDayS = common:integer_to_binary(ServerDay),
-            ServerHourS = common:integer_to_binary(ServerHour),
-            ServerMinuteS = common:integer_to_binary(ServerMinute),
-            ServerSecondS = common:integer_to_binary(ServerSecond),
-            ServerTimeS = list_to_binary([ServerYearS, <<"-">>, ServerMonthS, <<"-">>, ServerDayS, <<" ">>, ServerHourS, <<":">>, ServerMinuteS, <<":">>, ServerSecondS]),
-            VehicleID = State#vdritem.vehicleid,
-            {AIKey, AIVal, _AIKeyVal} = create_pos_app_sql(AppInfo),
-            SQL0 = list_to_binary([<<"insert into vehicle_position_">>, DBBin,
-                                   <<"(vehicle_id, certificate_code, gps_time, server_time, longitude, latitude, height, speed, direction, status_flag, alarm_flag, pos_desc">>,
-                                   AIKey, <<") values(">>,
-                                   common:integer_to_binary(VehicleID), <<", '">>,
-                                   CertCode, <<"', '">>,
-                                   TimeS, <<"', '">>,
-                                   ServerTimeS, <<"', ">>,
-                                   common:float_to_binary(Lon/1000000.0), <<", ">>,
-                                   common:float_to_binary(Lat/1000000.0), <<", ">>,
-                                   common:integer_to_binary(Height), <<", ">>,
-                                   common:float_to_binary(Speed/10.0), <<", ">>,
-                                   common:integer_to_binary(Direction), <<", ">>,
-                                   common:integer_to_binary(StateFlag), <<", ">>,
-                                   common:integer_to_binary(AlarmSym), <<", '">>, 
-                                   list_to_binary(Address), <<"'">>,
-                                   AIVal, <<")">>]),
-            %common:loginfo("SQL0 : ~p", [SQL0]),
-            if
-                Lon == 0 orelse Lon == 0.0 orelse Lat == 0 orelse Lat == 0.0 ->
-                    if
-                        State#vdritem.lastlat == 0 orelse State#vdritem.lastlat == 0.0 orelse State#vdritem.lastlon == 0 orelse State#vdritem.lastlon == 0.0 ->
-                            LastPosTablePid = State#vdritem.lastpostablepid,
-                            SelfPid = State#vdritem.pid,
-                            VIDKey = State#vdritem.vehicleid,
-                            LastPosTablePid ! {SelfPid, get, VIDKey},
-                            receive
-                                {SelfPid, Info} ->
-                                    [LonStored, LatStored] = Info,
-                                    SQL1 = list_to_binary([<<"replace into vehicle_position_last(vehicle_id, certificate_code, gps_time, server_time, longitude, latitude, height, speed, direction, status_flag, alarm_flag, pos_desc">>, 
-                                                           AIKey, <<", is_online) values(">>,
-                                                           common:integer_to_binary(VehicleID), <<", '">>,
-                                                           CertCode, <<"', '">>,
-                                                           TimeS, <<"', '">>,
-                                                           ServerTimeS, <<"', ">>,
-                                                           common:float_to_binary(LonStored/1000000.0), <<", ">>,
-                                                           common:float_to_binary(LatStored/1000000.0), <<", ">>,
-                                                           common:integer_to_binary(Height), <<", ">>,
-                                                           common:float_to_binary(Speed/10.0), <<", ">>,
-                                                           common:integer_to_binary(Direction), <<", ">>,
-                                                           common:integer_to_binary(StateFlag), <<", ">>,
-                                                           common:integer_to_binary(AlarmSym), <<", '">>, 
-                                                           list_to_binary(Address), <<"'">>,
-                                                           AIVal, <<", 1)">>]),
-                                    {ok, [SQL0, SQL1]}
-                            after ?PROC_RESP_TIMEOUT ->
-                                    SQL1 = list_to_binary([<<"replace into vehicle_position_last(vehicle_id, certificate_code, gps_time, server_time, longitude, latitude, height, speed, direction, status_flag, alarm_flag, pos_desc">>,
-                                                           AIKey, <<", is_online) values(">>,
-                                                           common:integer_to_binary(VehicleID), <<", '">>,
-                                                           CertCode, <<"', '">>,
-                                                           TimeS, <<"', '">>,
-                                                           ServerTimeS, <<"', ">>,
-                                                           common:float_to_binary(0.0), <<", ">>,
-                                                           common:float_to_binary(0.0), <<", ">>,
-                                                           common:integer_to_binary(Height), <<", ">>,
-                                                           common:float_to_binary(Speed/10.0), <<", ">>,
-                                                           common:integer_to_binary(Direction), <<", ">>,
-                                                           common:integer_to_binary(StateFlag), <<", ">>,
-                                                           common:integer_to_binary(AlarmSym), <<", '">>, 
-                                                           list_to_binary(Address), <<"'">>,
-                                                           AIVal, <<", 1)">>]),
-                                    {ok, [SQL0, SQL1]}
-                            end;
-                        true ->
-                            SQL1 = list_to_binary([<<"replace into vehicle_position_last(vehicle_id, certificate_code, gps_time, server_time, longitude, latitude, height, speed, direction, status_flag, alarm_flag, pos_desc">>, 
-                                                   AIKey, <<", is_online) values(">>,
-                                                   common:integer_to_binary(VehicleID), <<", '">>,
-                                                   CertCode, <<"', '">>,
-                                                   TimeS, <<"', '">>,
-                                                   ServerTimeS, <<"', ">>,
-                                                   common:float_to_binary(State#vdritem.lastlon/1000000.0), <<", ">>,
-                                                   common:float_to_binary(State#vdritem.lastlat/1000000.0), <<", ">>,
-                                                   common:integer_to_binary(Height), <<", ">>,
-                                                   common:float_to_binary(Speed/10.0), <<", ">>,
-                                                   common:integer_to_binary(Direction), <<", ">>,
-                                                   common:integer_to_binary(StateFlag), <<", ">>,
-                                                   common:integer_to_binary(AlarmSym), <<", '">>, 
-                                                   list_to_binary(Address), <<"'">>,
-                                                   AIVal, <<", 1)">>]),
-                            {ok, [SQL0, SQL1]}
-                    end;
-                true ->
-                    SQL1 = list_to_binary([<<"replace into vehicle_position_last(vehicle_id, certificate_code, gps_time, server_time, longitude, latitude, height, speed, direction, status_flag, alarm_flag, pos_desc">>, 
-                                           AIKey, <<", is_online) values(">>,
-                                           common:integer_to_binary(VehicleID), <<", '">>,
-                                           CertCode, <<"', '">>,
-                                           TimeS, <<"', '">>,
-                                           ServerTimeS, <<"', ">>,
-                                           common:float_to_binary(Lon/1000000.0), <<", ">>,
-                                           common:float_to_binary(Lat/1000000.0), <<", ">>,
-                                           common:integer_to_binary(Height), <<", ">>,
-                                           common:float_to_binary(Speed/10.0), <<", ">>,
-                                           common:integer_to_binary(Direction), <<", ">>,
-                                           common:integer_to_binary(StateFlag), <<", ">>,
-                                           common:integer_to_binary(AlarmSym), <<", '">>,
-                                           list_to_binary(Address), <<"'">>,
-                                           AIVal, <<", 1)">>]),
-                    {ok, [SQL0, SQL1]}
-            end;
-        _ ->
-            error
-    end.
-
-create_pos_app_sql(AppInfo) ->
-    Init = [{16#1, <<", distance">>, <<", NULL">>, null}, 
-            {16#2, <<", oil">>, <<", NULL">>, null}, 
-            {16#3, <<", record_speed">>, <<", NULL">>, null},
-            {16#4, <<", event_man_acq">>, <<", NULL">>, null}, 
-            {16#11, <<", ex_speed_type, ex_speed_id">>, <<", NULL, NULL">>, null},
-            {16#12, <<", alarm_add_type, alarm_add_id, alarm_add_direct">>, <<", NULL, NULL, NULL">>, null}, 
-            {16#13, <<", road_alarm_id, road_alarm_time, road_alarm_result">>, <<", NULL, NULL, NULL">>, null}, 
-            {16#25, <<", ex_state">>, <<", NULL">>, null}, 
-            {16#2A, <<", io_state">>, <<", NULL">>, null}, 
-            {16#2B, <<", analog_quantity_ad0, analog_quantity_ad1">>, <<", NULL, NULL">>, null}, 
-            {16#30, <<", wl_signal_amp">>, <<", NULL">>, null}, 
-            {16#31, <<", gnss_count">>, <<", NULL">>, null}],
-    combine_pos_app_sql_parts(create_pos_app_sql_part(Init, AppInfo)).
-
-combine_pos_app_sql_parts(Parts) when is_list(Parts),
-                                      length(Parts) > 0 ->
-    [H|T] = Parts,
-    {_ID, Key, Val, KeyVal} = H,
-    {A, B, C} = combine_pos_app_sql_parts(T),
-    if
-        KeyVal == null ->
-            {list_to_binary([Key, A]), list_to_binary([Val, B]), list_to_binary([<<"">>, C])};
-        true ->
-            {list_to_binary([Key, A]), list_to_binary([Val, B]), list_to_binary([KeyVal, C])}
-    end;
-combine_pos_app_sql_parts(_Parts) ->
-    {[], [], []}.
-
-create_pos_app_sql_part(Init, AppInfo) when is_list(AppInfo),
-                                            length(AppInfo) > 0 ->
-    [H|T] = AppInfo,
-    case H of
-        [ID, Res] ->
-            case ID of
-                16#1 ->
-                    A = <<", distance">>,
-                    B = list_to_binary([<<", ">>, common:float_to_binary(Res / 10.0)]),
-                    C = list_to_binary([<<", distance=">>, common:float_to_binary(Res / 10.0)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#1, {A, B, C}), T);
-                16#2 ->
-                    A = <<", oil">>,
-                    B = list_to_binary([<<", ">>, common:float_to_binary(Res / 10.0)]),
-                    C = list_to_binary([<<", oil=">>, common:float_to_binary(Res / 10.0)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#2, {A, B, C}), T);
-                16#3 ->
-                    A = <<", record_speed">>,
-                    B = list_to_binary([<<", ">>, common:float_to_binary(Res / 10.0)]),
-                    C = list_to_binary([<<", record_speed=">>, common:float_to_binary(Res / 10.0)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#3, {A, B, C}), T);
-                16#4 ->
-                    A = <<", event_man_acq">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res)]),
-                    C = list_to_binary([<<", event_man_acq=">>, common:integer_to_binary(Res)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#4, {A, B, C}), T);
-                16#11 ->
-                    A = <<", ex_speed_type">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res)]),
-                    C = list_to_binary([<<", ex_speed_type=">>, common:integer_to_binary(Res)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#11, {A, B, C}), T);
-                16#25 ->
-                    A = <<", ex_state">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res)]),
-                    C = list_to_binary([<<", ex_state=">>, common:integer_to_binary(Res)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#25, {A, B, C}), T);
-                16#2A ->
-                    A = <<", io_state">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res)]),
-                    C = list_to_binary([<<", io_state=">>, common:integer_to_binary(Res)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#2A, {A, B, C}), T);
-                16#30 ->
-                    A = <<", wl_signal_amp">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res)]),
-                    C = list_to_binary([<<", wl_signal_amp=">>, common:integer_to_binary(Res)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#30, {A, B, C}), T);
-                16#31 ->
-                    A = <<", gnss_count">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res)]),
-                    C = list_to_binary([<<", gnss_count=">>, common:integer_to_binary(Res)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#31, {A, B, C}), T);
-                _ ->
-                    create_pos_app_sql_part(Init, T)
-            end;                
-        [ID, Res1, Res2] ->
-            case ID of
-                16#11 ->
-                    A = <<", ex_speed_type, ex_speed_id">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res1), <<", ">>, common:integer_to_binary(Res2)]),
-                    C = list_to_binary([<<", ex_speed_type=">>, common:integer_to_binary(Res1), <<", ex_speed_id=">>, common:integer_to_binary(Res2)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#11, {A, B, C}), T);
-                16#2B ->
-                    A = <<", analog_quantity_ad0, analog_quantity_ad1">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res1), <<", ">>, common:integer_to_binary(Res2)]),
-                    C = list_to_binary([<<", analog_quantity_ad0=">>, common:integer_to_binary(Res1), <<", analog_quantity_ad1=">>, common:integer_to_binary(Res2)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#2B, {A, B, C}), T);
-                _ ->
-                    create_pos_app_sql_part(Init, T)
-            end;
-        [ID, Res1, Res2, Res3] ->
-            case ID of
-                16#12 ->
-                    A = <<", alarm_add_type, alarm_add_id, alarm_add_direct">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res1), <<", ">>, common:integer_to_binary(Res2), <<", ">>, common:integer_to_binary(Res3)]),
-                    C = list_to_binary([<<", alarm_add_type=">>, common:integer_to_binary(Res1), <<", alarm_add_id=">>, common:integer_to_binary(Res2), <<", alarm_add_direct=">>, common:integer_to_binary(Res3)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#12, {A, B, C}), T);
-                16#13 ->
-                    A = <<", road_alarm_id, road_alarm_time, road_alarm_result">>,
-                    B = list_to_binary([<<", ">>, common:integer_to_binary(Res1), <<", ">>, common:integer_to_binary(Res2), <<", ">>, common:integer_to_binary(Res3)]),
-                    C = list_to_binary([<<", road_alarm_id=">>, common:integer_to_binary(Res1), <<", road_alarm_time=">>, common:integer_to_binary(Res2), <<", road_alarm_result=">>, common:integer_to_binary(Res3)]),
-                    create_pos_app_sql_part(replace_pos_app_list(Init, 16#13, {A, B, C}), T);
-                _ ->
-                    create_pos_app_sql_part(Init, T)
-            end;
-        _ ->
-            [<<>>, <<>>]
-    end;
-create_pos_app_sql_part(Init, _AppInfo) ->
-    Init.
 
 replace_pos_app_list(Init, ID, Item) when is_list(Init),
                                           length(Init) > 0 ->
