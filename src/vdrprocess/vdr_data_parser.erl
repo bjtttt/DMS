@@ -189,13 +189,15 @@ restore_7d_7e_msg(State, Data) ->
             error
     end.
 
-%%%
-%%% Check whether received a complete msg packages
-%%% State#vdritem.msg : [[ID0,MsgIdx0,Total0,Index0,Data0],[ID1,MsgIdx1,Total1,Index1,Data1],[ID2,MsgIdx2,Total2,Index2,Data2],..
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Check whether received a complete msg packages
+% State#vdritem.msg : [[ID0,MsgIdx0,Total0,Index0,Data0],[ID1,MsgIdx1,Total1,Index1,Data1],[ID2,MsgIdx2,Total2,Index2,Data2],..
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
+    StoredMsg = State#vdritem.msg,
     % Get all msg packages with the same ID
-	StoredMsg = State#vdritem.msg,
     MsgWithID = get_msg_with_id(StoredMsg, ID),        % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID == ID ]
     % Get all msg packages without the same ID
     MsgWithoutID = get_msg_without_id(StoredMsg, ID),  % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID =/= ID ]
@@ -204,14 +206,7 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
         [] ->
 			MergedList = lists:merge([[ID,MsgIdx,Total,Idx,Body]], StoredMsg),
             NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs([[ID,MsgIdx,Total,Idx,Body]])),
-			common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 0 : ~p", 
-						   [State#vdritem.addr,
-							State#vdritem.id,
-							State#vdritem.serialno,
-							State#vdritem.auth,
-							State#vdritem.vehicleid,
-							State#vdritem.vehiclecode,
-							NewMsgPackages]),
+			vdr_handler:logvdr(info, State, "new MSG packages 0 : ~p", NewMsgPackages]),
     		NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
@@ -375,18 +370,18 @@ update_msg_packs(MsgPacks, ID, MsgIdxs) when is_list(MsgPacks),
 update_msg_packs(MsgPacks, _ID, _MsgIdxs) ->
 	MsgPacks.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% Parameter
-% MsgWithID	: [[ID0, MsgIdx0, Total0, Idx0, Body0], [ID1, MsgIdx1, Total1, Idx1, Body1], [ID2, MsgIdx2, Total2, Idx2, Body2], ...]
+% Parameter :
+%       MsgWithID	: [[ID0, MsgIdx0, Total0, Idx0, Body0], [ID1, MsgIdx1, Total1, Idx1, Body1], [ID2, MsgIdx2, Total2, Idx2, Body2], ...]
 %
-% Output
-% {FirstMsgIdx, [MsgIdxn0, MsgIdxn1, MsgIdxn2, ...]}
-%		MsgIdxnn is not in MsgWithID
-% none
-%		it means it is the 1st message package
+% Output :
+%       {FirstMsgIdx, [MsgIdxn0, MsgIdxn1, MsgIdxn2, ...]}
+%           MsgIdxnn is not in MsgWithID
+%       none
+%           it means it is the 1st message package
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_missing_pack_msgidxs(MsgWithID) when is_list(MsgWithID),
                                          length(MsgWithID) > 0 ->
     Last = lists:last(MsgWithID),
@@ -402,11 +397,11 @@ get_missing_pack_msgidxs(MsgWithID) when is_list(MsgWithID),
 get_missing_pack_msgidxs(_MsgWithID) ->
     none.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 calc_missing_pack_msgidxs(MissingIdxs, LastMsgIdx, LastIdx) when is_list(MissingIdxs),
                                                                  length(MissingIdxs) > 0,
                                                                  is_integer(LastMsgIdx),
@@ -419,6 +414,11 @@ calc_missing_pack_msgidxs(MissingIdxs, LastMsgIdx, LastIdx) when is_list(Missing
 calc_missing_pack_msgidxs(_MissingIdxs, _LastMsgIdx, _LastIdx) ->
     [].
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
                                                              length(MsgWithID) > 0,
                                                              is_integer(MsgIdx),
@@ -478,10 +478,12 @@ check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
 			end
 	end.
 
-%%%
-%%% Msg : [[ID0,FlowNum0,Total0,Index0,Data0],[ID1,FlowNum1,Total1,Index1,Data1],[ID2,FlowNum2,Total2,Index2,Data2],...
-%%% This function is to created a new list with the ones whose IDn is the same as ID.
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Msg : [[ID0,FlowNum0,Total0,Index0,Data0],[ID1,FlowNum1,Total1,Index1,Data1],[ID2,FlowNum2,Total2,Index2,Data2],...
+%   This function is to created a new list with the ones whose IDn is the same as ID.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_msg_with_id(Msg, ID) ->
     case Msg of
         [] ->
@@ -497,10 +499,12 @@ get_msg_with_id(Msg, ID) ->
             end
     end.
 
-%%%
-%%% Msg : [[ID0,FlowNum0,Total0,Index0,Data0],[ID1,FlowNum1,Total1,Index1,Data1],[ID2,FlowNum2,Total2,Index2,Data2],...
-%%% This function is to created a new list with the ones whose IDn is NOT the same as ID.
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Msg : [[ID0,FlowNum0,Total0,Index0,Data0],[ID1,FlowNum1,Total1,Index1,Data1],[ID2,FlowNum2,Total2,Index2,Data2],...
+% This function is to created a new list with the ones whose IDn is NOT the same as ID.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_msg_without_id(Msg, ID) ->
     case Msg of
         [] ->
