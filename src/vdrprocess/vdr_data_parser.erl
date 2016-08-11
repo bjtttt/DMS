@@ -341,31 +341,35 @@ remove_msgidx_with_id(MsgPacks, ID) when is_list(MsgPacks),
 remove_msgidx_with_id(_MsgPacks, _ID) ->
     [].
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% MsgPacks	: [[ID0, FirstMsgIdx0, MsgIdxs0], [ID1, FirstMsgIdx1, MsgIdxs1], [ID2, FirstMsgIdx2, MsgIdxs2], ...]
-% ID		:
-% MsgIdxs	: [MsgIdx0, MsgIdx1, MsgIdx2, ...] --- It should be the output of get_missing_pack_msgidxs(MsgWithID)
+% Description :
+%   Update the recieived MSG indexes after receiving a new MSG with the same ID
+% Parameter :
+%       MsgPacks	: [[ID0, FirstMsgIdx0, MsgIdxs0], [ID1, FirstMsgIdx1, MsgIdxs1], [ID2, FirstMsgIdx2, MsgIdxs2], ...]
+%                       MsgIdexn is the indexes of all the received messages with the same ID 
+%       ID		    :
+%       MsgIdxs	    : [MsgIdx0, MsgIdx1, MsgIdx2, ...] --- It should be the output of get_missing_pack_msgidxs(MsgWithID)
+%                       If MsgIdxs == [], the ID related item will be removed from MsgPacks
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 update_msg_packs(MsgPacks, ID, MsgIdxs) when is_list(MsgPacks),
                                              length(MsgPacks) > 0,
                                              is_integer(ID),
                                              ID > 0,
-											 is_list(MsgIdxs),
-											 length(MsgIdxs) > 0 ->
+											 is_list(MsgIdxs) ->
     [H|T] = MsgPacks,
     [HID, HFirstMsgIdx, _HMsgIdxs] = H,
 	if
 		HID == ID ->
-			case MsgIdxs of
-				none ->
-					T;
-				_ ->
-					lists:merge([[ID, HFirstMsgIdx, MsgIdxs]], T)
-			end;
+            case MsgIdxs of
+                [] ->
+                    T;
+                _ ->
+                    lists:merge([[ID, HFirstMsgIdx, MsgIdxs]], T)
+            end;
 		true ->
-			lists:merge([[H]], update_msg_packs(T, ID, MsgIdxs))
+			lists:merge([H], update_msg_packs(T, ID, MsgIdxs))
 	end;
 update_msg_packs(MsgPacks, _ID, _MsgIdxs) ->
 	MsgPacks.
