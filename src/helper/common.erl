@@ -25,11 +25,7 @@
 		 integer_to_size_binary/2,
 		 integer_list_to_size_binary_list/2,
          float_to_binary/1,
-         convert_gbk_to_utf8/1,
-         convert_utf8_to_gbk/1,
 		 get_str_bin_to_bin_list/1,
-		 send_stat_err/2,
-		 send_stat_err_server/2,
 		 send_vdr_table_operation/2,
 		 get_binary_from_list/1,
 		 get_list_from_binary/1]).
@@ -499,45 +495,6 @@ send_vdr_table_operation(VDRTablePid, Oper) ->
             end,
             ok
     end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-%   VDR sends information to link information process.
-% Parameter :
-%       State   :
-%       Type    :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-send_stat_err(State, Type) ->
-	if
-		State#vdritem.linkpid =/= undefined ->
-			State#vdritem.linkpid ! {self(), Type},
-            ok;
-		true ->
-            [Result] = ets:lookup(msgservertable, vdrtablepid),
-			case Result of
-				{linkpid, LinkInfoPid} ->
-					LinkInfoPid ! {self(), Type},
-                    {modified, #vdritem{linkpid=LinkInfoPid}=State};
-				_ ->
-					ok
-			end
-	end.
-
-send_stat_err_server(State, Type) ->
-	if
-		State#serverstate.linkpid =/= undefined ->
-			State#serverstate.linkpid ! {self(), Type};
-		true ->
-            [Result] = ets:lookup(msgservertable, vdrtablepid),
-			case Result of
-				{linkpid, LinkPid} ->
-					LinkPid ! {self(), Type};
-				_ ->
-					ok
-			end
-	end.
 
 get_binary_from_list(List) when is_list(List) ->
 	try

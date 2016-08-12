@@ -20,6 +20,7 @@
 %%    waiting for in each element of the queue. Responses are queued until
 %%    we have all the responses we need and then reply with all of them.
 %%
+
 -module(eredis_client).
 -behaviour(gen_server).
 -include("../../include/eredis/eredis.hrl").

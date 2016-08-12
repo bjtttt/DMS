@@ -1,8 +1,8 @@
 %
-% ccprocessor.erl
+% cc_processor.erl
 %
 
--module(ccprocessor).
+-module(cc_processor).
 
 -export([to_utf8/1, to_utf8/2, to_gbk/1, to_gbk/2, init_code_table/0]).
 

@@ -72,7 +72,11 @@ do_process_data(State, Data) ->
             {HeaderBody, Parity} = split_binary(RawData, NoParityLen),
             CalcParity = bxorbytelist(HeaderBody),
             if
-                CalcParity == Parity ->
+                CalcParity =/= Parity ->
+                    common:send_stat_err(State, parerr),
+                    common:loginfo("Parity error (calculated)~p:(data)~p from ~p", [CalcParity, Parity, State#vdritem.addr]),
+                    {error, parityerror, State}
+                true ->
                     <<ID:16, Property:16, Tel:48, MsgIdx:16, Tail/binary>> = HeaderBody,
                     <<_Reserved:2, Pack:1, CryptoType:3, BodyLen:10>> = <<Property:16>>,
                     HeadInfo = {ID, MsgIdx, Tel, CryptoType},
@@ -140,11 +144,7 @@ do_process_data(State, Data) ->
                                             end
                                     end
                             end
-                    end;
-                CalcParity =/= Parity ->
-					common:send_stat_err(State, parerr),
-                    common:loginfo("Parity error (calculated)~p:(data)~p from ~p", [CalcParity, Parity, State#vdritem.addr]),
-                    {error, parityerror, State}
+                    end
             end;
         error ->
 			common:send_stat_err(State, resterr),

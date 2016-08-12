@@ -6,14 +6,15 @@
 
 -include("../../include/header.hrl").
 
--export([lognone/1, 
-        lognone/2, 
-        loginfo/1, 
-        loginfo/2, 
-        loghint/1, 
-        loghint/2, 
-        logerr/1, 
-        logerr/2]).
+-export([lognone/1,
+         lognone/2,
+         loginfo/1,
+         loginfo/2,
+         loghint/1,
+         loghint/2,
+         logerr/1,
+         logerr/2,
+         log_vdr_statistics_info]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -188,3 +189,56 @@ do_log(Format, Data, CurLevel, DispErr) when is_list(Data),
 do_log(_Format, _Data, _CurLevel, _DispErr) ->
     ok.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   VDR sends information to link information process.
+% Parameter :
+%       State   :
+%       Type    :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_vdr_statistics_info(State, Type) ->
+    if
+        State#vdritem.linkpid =/= undefined ->
+            State#vdritem.linkpid ! {self(), Type},
+            ok;
+        true ->
+            vdr_handler:logvdr(error, State, "undefined link info pid", [])
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+%       Type        : all|none|info|hint|error
+%       State       :
+%       FormatEx    :
+%       DataEx      :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
+                                           is_list(DataEx) ->
+    Format = "(Pid ~p) vdr_handler (id ~p, addr ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p, driverid ~p) : ",
+    NewFormat = string:concat(Format, FormatEx),
+    Data = [self(),
+            State#vdritem.id, 
+            State#vdritem.addr,
+            State#vdritem.serialno,
+            State#vdritem.auth,
+            State#vdritem.vehicleid,
+            State#vdritem.vehiclecode,
+            State#vdritem.driverid],
+    NewData = lists:append(Data, DataEx),
+    if
+        Type == error ->
+            log:logerr(NewFormat, NewData);
+        Type == hint ->
+            log:loghint(NewFormat, NewData);
+        Type == info ->
+            log:loginfo(NewFormat, NewData);
+        Type == none ->
+            log:lognone(NewFormat, NewData);
+        true ->
+            log:logall(NewFormat, NewData)
+    end.

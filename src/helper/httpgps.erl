@@ -2,7 +2,7 @@
 % httpgps.erl
 %
 
--module(log).
+-module(httpgps).
 
 -include("../../include/header.hrl").
 

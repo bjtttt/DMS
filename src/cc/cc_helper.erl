@@ -1,13 +1,14 @@
 %
-% cchelper.erl
+% cc_helper.erl
 %
 
--module(cchelper).
+-module(cc_helper).
 
 -include("../../include/header.hrl").
 
 -export([convert_utf8_to_gbk/1, 
-        convert_gbk_to_utf8/1]).
+        convert_gbk_to_utf8/1,
+        code_convertor_process/0]).
 
 convert_utf8_to_gbk(Src) when is_binary(Src) orelse is_list(Src) ->
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),

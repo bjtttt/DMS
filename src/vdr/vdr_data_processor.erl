@@ -1,8 +1,8 @@
 %
-% vdrdataprocessor.erl
+% vdr_data_processor.erl
 %
 
--module(vdrdataprocessor).
+-module(vdr_data_processor).
 
 -include("../../include/header.hrl").
 

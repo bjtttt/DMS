@@ -2,7 +2,7 @@
 % msghelper.erl
 %
 
--module(msghelper).
+-module(msg_helper).
 
 -include("../../include/header.hrl").
 

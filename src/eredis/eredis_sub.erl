@@ -1,6 +1,7 @@
 %%
 %% Erlang PubSub Redis client
 %%
+
 -module(eredis_sub).
 -include("eredis.hrl").
 

@@ -3,7 +3,7 @@ EBIN := ../ebin
 %.beam: %.erl
 	erlc +debug_info -W -o $(EBIN) $<
         
-MODS = $(shell ls *.erl)
+MODS = $(shell ls *.erl) $(shell ls cc/*.erl) $(shell ls eredis/*.erl) $(shell ls helper/*.erl)  $(shell ls vdr/*.erl)
 
 compile: ${MODS:%.erl=%.beam}
 	@echo "make clean - clean up"
@@ -11,4 +11,4 @@ compile: ${MODS:%.erl=%.beam}
 all: compile
 
 clean:
-	rm -rf  $(EBIN)/*.beam 
+	rm -rf  $(EBIN)/*.beam
