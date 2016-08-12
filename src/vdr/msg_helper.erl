@@ -2,6 +2,7 @@
 % msghelper.erl
 %
 
+
 -module(msg_helper).
 
 -include("../../include/header.hrl").
@@ -11,6 +12,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
+%   Sometimes, VDR will send more than one messages in one time. So we need to split it to a single message list
 % Msg structure :
 %     Flag    : == 1 byte
 %     Head    : 11 or 15 bytes

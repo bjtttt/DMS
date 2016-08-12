@@ -13,8 +13,6 @@
          convert_bcd_integer/1,
 		 convert_integer_bcd/1,
          removemsgfromlistbyflownum/2,
-         split_msg_to_single/2,
-         is_string_list/1,
          is_integer_string/1,
          is_dec_integer_string/1,
          is_hex_integer_string/1,

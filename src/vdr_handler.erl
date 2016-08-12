@@ -44,7 +44,7 @@ init([CSock, Addr, LinkInfoPid]) ->
 					 httpgpspid=HttpGpsPid, 
                      vdrlogpid=VDRLogPid, 
                      vdronlinepid=VDROnlinePid},
-	common:send_stat_err(State, ?CONN_STAT_CONN),
+	log:log_vdr_statistics_info(State, ?CONN_STAT_CONN),
     set_sock_opts(CSock),
     {ok, State, ?VDR_MSG_TIMEOUT}.       
 
@@ -167,8 +167,8 @@ handle_info({tcp, Socket, Data}, PrevState) ->
             log:logvdr(error, State, "vdr_handler:handle_info(...) empty splitted data from ~p", [Msgs]),
             if
                 ErrCount >= ?MAX_VDR_ERR_COUNT ->
-					common:send_stat_err(State, ?CONN_STAT_DISC_ERR_CNT),
-					common:send_stat_err(State, ?CONN_STAT_DISC_GW),
+					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
+					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_GW),
                     {stop, vdrerror, State#vdritem{errorcount=ErrCount}};
                 true ->
                     set_sock_opts(Socket),
@@ -195,27 +195,27 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                 {error, ErrType, NewState} ->
 					if
 						ErrType == charerror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_CHAR);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_CHAR);
 						ErrType == regerror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_REG);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_REG);
 						ErrType == autherror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_AUTH);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_AUTH);
 						ErrType == unautherror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_UNAUTH);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNAUTH);
 						ErrType == invalidmsgerror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_INVALID_MSG);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_INVALID_MSG);
 						ErrType == exiterror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_UNREG);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNREG);
 						ErrType == vdrerror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_MSG_ERR);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_MSG_ERR);
 						ErrType == unvdrerror ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_UNK_MSG_ERR);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNK_MSG_ERR);
 						ErrType == exception ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_MSGEX);
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_MSGEX);
 						true ->
-							common:send_stat_err(State, ?CONN_STAT_DISC_UNK_ERR)
+							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNK_ERR)
 					end,
-					common:send_stat_err(State, ?CONN_STAT_DISC_GW),
+					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_GW),
                     {stop, ErrType, NewState};
                 {warning, NewState} ->
                     set_sock_opts(Socket),
@@ -227,11 +227,11 @@ handle_info({tcp, Socket, Data}, PrevState) ->
     end;
 handle_info({tcp_closed, _Socket}, State) -> 
     log:logvdr(error, State, "vdr_handler:handle_info(...) tcp_closed", []),
-	common:send_stat_err(State, ?CONN_STAT_DISC_CLI),
+	log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_CLI),
 	{stop, tcp_closed, State};
 handle_info(timeout, State) ->
     log:logvdr(error, State, "vdr_handler:handle_info(...) timeout", []),
-	common:send_stat_err(State, ?CONN_STAT_DISC_TIMEOUT),
+	log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_TIMEOUT),
 	{stop, vdrtimeout, State};
 handle_info(Info, State) ->   
     log:logvdr(error, State, "vdr_handler:handle_info(...) unknown ~p", [Info]),
@@ -322,7 +322,7 @@ process_vdr_msges(Socket, Msges, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 safe_process_vdr_msg(Socket, Msg, State) ->
-    try vdrdataprocessor:process_vdr_data(Socket, Msg, State)
+    try vdr_data_processor:process_vdr_data(Socket, Msg, State)
     catch
         _:Ex ->
 			[ST] = erlang:get_stacktrace(),

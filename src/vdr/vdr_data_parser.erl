@@ -75,7 +75,7 @@ do_process_data(State, Data) ->
                 CalcParity =/= Parity ->
                     common:send_stat_err(State, parerr),
                     common:loginfo("Parity error (calculated)~p:(data)~p from ~p", [CalcParity, Parity, State#vdritem.addr]),
-                    {error, parityerror, State}
+                    {error, msg_parity_error, State}
                 true ->
                     <<ID:16, Property:16, Tel:48, MsgIdx:16, Tail/binary>> = HeaderBody,
                     <<_Reserved:2, Pack:1, CryptoType:3, BodyLen:10>> = <<Property:16>>,

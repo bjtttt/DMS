@@ -6,9 +6,25 @@
 
 -include("../../include/header.hrl").
 
--export([convert_utf8_to_gbk/1, 
-        convert_gbk_to_utf8/1,
-        code_convertor_process/0]).
+-export([convert_utf8_to_gbk/1,
+         convert_utf8_to_gbk/2,
+         convert_gbk_to_utf8/1,
+         convert_gbk_to_utf8/2,
+         code_convertor_process/0]).
+
+convert_utf8_to_gbk(CCPid, Src) when is_binary(Src) orelse is_list(Src) ->
+    CCPid ! {self(), utf82gbk, Src},
+    receive
+        undefined ->
+            Src;
+        Value ->
+            Value
+    after ?TIMEOUT_CC_PROCESS ->
+            Src
+    end;
+convert_utf8_to_gbk(_CCPid, Src) ->
+    Src.
+
 
 convert_utf8_to_gbk(Src) when is_binary(Src) orelse is_list(Src) ->
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
@@ -22,6 +38,19 @@ convert_utf8_to_gbk(Src) when is_binary(Src) orelse is_list(Src) ->
             Src
     end;
 convert_utf8_to_gbk(Src) ->
+    Src.
+    
+convert_gbk_to_utf8(CCPid, Src) when is_binary(Src) orelse is_list(Src) ->
+    CCPid ! {self(), gbk2utf8, Src},
+    receive
+        undefined ->
+            Src;
+        Value ->
+            Value
+    after ?TIMEOUT_CC_PROCESS ->
+            Src
+    end;
+convert_gbk_to_utf8(_CCPid, Src) ->
     Src.
     
 convert_gbk_to_utf8(Src) when is_binary(Src) orelse is_list(Src) ->
