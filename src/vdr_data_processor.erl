@@ -4,7 +4,7 @@
 
 -module(vdr_data_processor).
 
--include("../../include/header.hrl").
+-include("../include/header.hrl").
 
 -export([process_vdr_data/3]).
 

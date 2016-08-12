@@ -1,12 +1,14 @@
 %
-% log.erl
+% logger.erl
 %
 
--module(log).
+-module(logger).
 
--include("../../include/header.hrl").
+-include("../include/header.hrl").
 
--export([lognone/1,
+-export([logall/1,
+         logall/2,
+         lognone/1,
          lognone/2,
          loginfo/1,
          loginfo/2,
@@ -14,26 +16,56 @@
          loghint/2,
          logerr/1,
          logerr/2,
-         log_vdr_statistics_info]).
+         log_vdr_statistics_info/2,
+         log_vdr_info/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Description:
+%   Log all messages.
 % Parameter :
-%       Format       : a list, for example : [], [Msg] or [Msg1, Msg2]
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 logall(Format) ->
     do_log(Format, ?DISP_LEVEL_ALL, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log maybe useful messages.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 lognone(Format) ->
     do_log(Format, ?DISP_LEVEL_NONE, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log common messages.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 loginfo(Format) ->
     do_log(Format, ?DISP_LEVEL_INFO, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log important messages, such as some operation related messages
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 loghint(Format) ->
     do_log(Format, ?DISP_LEVEL_HINT, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log errors.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 logerr(Format) ->
     do_log(Format, ?DISP_LEVEL_ERR, 1).
 
@@ -102,24 +134,52 @@ do_log(Format, CurLevel, DispErr) when is_list(Format),
 do_log(_Format, _CurLevel, _DispErr) ->
     ok.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Description:
+%   Log all messages.
 % Parameter :
-%       Data        : a list, for example : [], [Msg] or [Msg1, Msg2]
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 logall(Format, Data) ->
     do_log(Format, Data, ?DISP_LEVEL_ALL, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log maybe useful messages.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 lognone(Format, Data) ->
     do_log(Format, Data, ?DISP_LEVEL_NONE, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log common messages.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 loginfo(Format, Data) ->
     do_log(Format, Data, ?DISP_LEVEL_INFO, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log important messages.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 loghint(Format, Data) ->
     do_log(Format, Data, ?DISP_LEVEL_HINT, 0).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log errors.
+% Parameter :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 logerr(Format, Data) ->
     do_log(Format, Data, ?DISP_LEVEL_ERR, 1).
 
@@ -217,9 +277,9 @@ log_vdr_statistics_info(State, Type) ->
 %       DataEx      :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
-                                           is_list(DataEx) ->
-    Format = "(Pid ~p) vdr_handler (id ~p, addr ~p, serialno ~p, auth ~p, vehicleid ~p, vehiclecode ~p, driverid ~p) : ",
+log_vdr_info(Type, State, FormatEx, DataEx) when is_list(FormatEx),
+                                                 is_list(DataEx) ->
+    Format = "(PID ~p, id ~p, ad ~p, sn ~p, au ~p, vid ~p, vc ~p, did ~p) ",
     NewFormat = string:concat(Format, FormatEx),
     Data = [self(),
             State#vdritem.id, 
@@ -241,4 +301,6 @@ logvdr(Type, State, FormatEx, DataEx) when is_list(FormatEx),
             log:lognone(NewFormat, NewData);
         true ->
             log:logall(NewFormat, NewData)
-    end.
+    end;
+log_vdr_info(_Type, _State, _FormatEx, _DataEx) ->
+    ok.

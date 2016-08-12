@@ -89,12 +89,12 @@ save_msg_4_vdr(State, FromVDR, Msg) ->
 			{Hour,Min,Second} = erlang:time(),
 			NewMsg = [{FromVDR, Msg, Year, Month, Day, Hour, Min, Second}],
 			NewStoredMsg = lists:merge([StoredMsg, NewMsg]),
-            log:logvdr(none, State, "vdr_handler:save_msg_4_vdr(...) store data : ~p", NewStoredMsg),
+            log:log_vdr_info(none, State, "vdr_handler:save_msg_4_vdr(...) store data : ~p", NewStoredMsg),
 			State#vdritem{storedmsg4save=NewStoredMsg};
 		true ->
             if
                 StoredMsg =/= [] ->
-                    log:logvdr(none, State, "vdr_handler:save_msg_4_vdr(...) send stored data : ~p", StoredMsg),
+                    log:log_vdr_info(none, State, "vdr_handler:save_msg_4_vdr(...) send stored data : ~p", StoredMsg),
                     save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid);
                 true ->
                     ok
@@ -102,7 +102,7 @@ save_msg_4_vdr(State, FromVDR, Msg) ->
 			{Year,Month,Day} = erlang:date(),
 			{Hour,Min,Second} = erlang:time(),
 			DateTime = {Year, Month, Day, Hour, Min, Second},
-            log:logvdr(none, State, "vdr_handler:save_msg_4_vdr(...) send data : ~p", Msg),
+            log:log_vdr_info(none, State, "vdr_handler:save_msg_4_vdr(...) send data : ~p", Msg),
 			VDRLogPid ! {save, VDRID, FromVDR, Msg, DateTime},
 			State#vdritem{storedmsg4save=[]}
 	end.
@@ -164,12 +164,11 @@ handle_info({tcp, Socket, Data}, PrevState) ->
         [] ->
 			common:send_stat_err(State, ?CONN_STAT_SPLIT_ERR),
             ErrCount = State#vdritem.errorcount + 1,
-            log:logvdr(error, State, "vdr_handler:handle_info(...) empty splitted data from ~p", [Msgs]),
+            log:log_vdr_info(error, State, "vdr_handler:handle_info(...) empty splitted data from ~p", [Msgs]),
             if
                 ErrCount >= ?MAX_VDR_ERR_COUNT ->
 					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
-					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_GW),
-                    {stop, vdrerror, State#vdritem{errorcount=ErrCount}};
+                    {stop, ?CONN_STAT_DISC_ERR_CNT, State#vdritem{errorcount=ErrCount}};
                 true ->
                     set_sock_opts(Socket),
                     {noreply, State#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
@@ -186,37 +185,14 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                     if
                         ErrCount >= ?MAX_VDR_ERR_COUNT ->
                             common:send_stat_err(State, ?CONN_STAT_DISC_ERR_CNT),
-							common:send_stat_err(State, ?CONN_STAT_DISC_GW),
-                            {stop, vdrerror, NewState#vdritem{errorcount=ErrCount}};
+                            {stop, ?CONN_STAT_DISC_ERR_CNT, NewState#vdritem{errorcount=ErrCount}};
                         true ->
                             set_sock_opts(Socket),
                             {noreply, NewState#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
                     end;
-                {error, ErrType, NewState} ->
-					if
-						ErrType == charerror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_CHAR);
-						ErrType == regerror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_REG);
-						ErrType == autherror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_AUTH);
-						ErrType == unautherror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNAUTH);
-						ErrType == invalidmsgerror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_INVALID_MSG);
-						ErrType == exiterror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNREG);
-						ErrType == vdrerror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_MSG_ERR);
-						ErrType == unvdrerror ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNK_MSG_ERR);
-						ErrType == msg_process_exception ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_MSGEX);
-						true ->
-							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNK_ERR)
-					end,
-					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_GW),
-                    {stop, ErrType, NewState};
+                {error, ErrNum, NewState} ->
+                    log:log_vdr_statistics_info(State, ErrNum),
+                    {stop, ErrNum, NewState};
                 {warning, NewState} ->
                     set_sock_opts(Socket),
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT};

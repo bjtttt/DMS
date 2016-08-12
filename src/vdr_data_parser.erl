@@ -6,7 +6,7 @@
 
 -module(vdr_data_parser).
 
--include("../../include/header.hrl").
+-include("../include/header.hrl").
 
 -export([process_data/2, bxorbytelist/1]).
 
@@ -16,19 +16,21 @@
 %restore_data(Data) ->
 %    Data.
 
-%%%
-%%% Parse the data from VDR
-%%% Return :
-%%%     {ok, HeadInfo, Res, State}
-%%%     {ignore, HeadInfo, State}
-%%%     {warning, HeadInfo, ErrorType, State}
-%%%     {error, exception/formaterror/parityerror, State}
-%%%
-%%%     formaterror : Head/Tail is not 16#7e
-%%%     parityerror :
-%%%     warning     : error message/not supported/fail
-%%%     ignore      : not complete message (maybe this state is not necessary)
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parse the data from VDR
+% Return :
+%     {ok, HeadInfo, Res, State}
+%     {ignore, HeadInfo, State}
+%     {warning, HeadInfo, ErrorType, State}
+%     {error, exception/formaterror/msg_parity_error, State}
+%
+%     formaterror : Head/Tail is not 16#7e
+%     msg_parity_error :
+%     warning     : error message/not supported/fail
+%     ignore      : not complete message (maybe this state is not necessary)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 process_data(State, Data) ->
     %DataDebug = <<126,2,0,0,46,1,86,121,16,51,112,0,14,0,0,0,0,0,0,0,17,0,0,0,0,0,0,0,0,0,0,0,0,0,0,19,3,20,0,64,34,1,4,0,0,0,0,2,2,0,0,3,2,0,0,4,2,0,0,42,126>>,
     NewData = get_data_binary(Data),
@@ -36,7 +38,7 @@ process_data(State, Data) ->
     catch
         _:Why ->
             [ST] = erlang:get_stacktrace(),
-            vdr_handler:logvdr(error, State, "parsing VDR data exception : ~p~ndata : ~p~nstack trace : ~p", [Why, Data, ST]),
+            log:logvdr(error, State, "parsing VDR data exception : ~p~ndata : ~p~nstack trace : ~p", [Why, Data, ST]),
             {error, msg_process_exception, State}
     end.
 
@@ -56,7 +58,7 @@ get_data_binary(Data) ->
 %     {error, formaterror/parityerror, State}
 %
 %     formaterror : Head/Tail is not 16#7e
-%     parityerror :
+%     CONN_STAT_DISC_PARITY :
 %     warning     : error message/not supported/fail
 %     ignore      : not complete message (maybe this state is not necessary)
 %
@@ -73,8 +75,8 @@ do_process_data(State, Data) ->
             CalcParity = bxorbytelist(HeaderBody),
             if
                 CalcParity =/= Parity ->
-                    common:loginfo("Parity error (calculated)~p:(data)~p from ~p", [CalcParity, Parity, State#vdritem.addr]),
-                    {error, msg_parity_error, State}
+                    log:logvdr(error, State, "parity error : calculated ~p =/= data ~p", [CalcParity, Parity, State#vdritem.addr]),
+                    {error, ?CONN_STAT_DISC_PARITY, State}
                 true ->
                     <<ID:16, Property:16, Tel:48, MsgIdx:16, Tail/binary>> = HeaderBody,
                     <<_Reserved:2, Pack:1, CryptoType:3, BodyLen:10>> = <<Property:16>>,
@@ -213,7 +215,7 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
         [] ->
 			NewStoredMsges = lists:merge([[ID,MsgIdx,Total,Idx,Body]], StoredMsges),
             NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs([[ID,MsgIdx,Total,Idx,Body]])),
-			vdr_handler:logvdr(info, State, "new MSG packages 0 : ~p", NewMsgPackages]),
+			log:logvdr(info, State, "new MSG packages 0 : ~p", NewMsgPackages]),
     		NewState = State#vdritem{msg=NewStoredMsges, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
@@ -495,20 +497,23 @@ check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
 %   This function is to created a new list with the ones whose IDn is the same as ID.
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-get_msg_with_id(Msg, ID) ->
-    case Msg of
-        [] ->
-            [];
-        _ ->
-            [H|T] = Msg,
-            [HID,_HMsgIdx,_HTotal,_HIdx,_HBody] = H,
+get_msg_with_id(Msg, ID) when is_list(Msg),
+                              length(Msg) > 0 ->
+    [H|T] = Msg,
+    [HID,_HMsgIdx,_HTotal,_HIdx,_HBody] = H,
+    TWithID = get_msg_with_id(T, ID),
+    if
+        HID == ID ->
             if
-                HID == ID ->
-                    [H|get_msg_with_id(T, ID)];
-                HID =/= ID ->
-                    get_msg_with_id(T, ID)
-            end
-    end.
+                TWithID == [] ->
+                    [H];
+                true ->
+                    lists:merge([H], TWithID);
+        HID =/= ID ->
+            TWithID
+    end;
+get_msg_with_id(_Msg, _ID) ->
+    []
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -516,20 +521,24 @@ get_msg_with_id(Msg, ID) ->
 % This function is to created a new list with the ones whose IDn is NOT the same as ID.
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-get_msg_without_id(Msg, ID) ->
-    case Msg of
-        [] ->
-            [];
-        _ ->
-            [H|T] = Msg,
-            [HID,_HMsgIdx,_HTotal,_HIdx,_HBody] = H,
+get_msg_without_id(Msg, ID) when is_list(Msg),
+                                 length(Msg) > 0 ->
+    [H|T] = Msg,
+    [HID,_HMsgIdx,_HTotal,_HIdx,_HBody] = H,
+    TWithoutID = get_msg_without_id(T, ID),
+    if
+        HID == ID ->
+            TWithoutID;
+        HID =/= ID ->
             if
-                HID == ID ->
-                    get_msg_without_id(T, ID);
-                HID =/= ID ->
-                    [H|get_msg_without_id(T, ID)]
+                TWithoutID == [] ->
+                    [H];
+                true ->
+                    lists:merge([H], get_msg_without_id(T, ID))
             end
-    end.
+    end;
+get_msg_without_id(_Msg, _ID) ->
+    [].
 
 %%%
 %%% Remove msg package with the same Index from the msg packages

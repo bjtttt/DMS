@@ -10,6 +10,7 @@
                 common,
                 vdr_data_parser,
                 vdr_data_processor,
+                vdr_msg_processor,
                 cc_helper,
                 cc_processor,
                 basho_bench_driver_eredis,
@@ -22,7 +23,7 @@
                 httpgps,
                 log,
                 stringex,
-                msg_helper]},
+                vdr_msg_helper]},
     {registered, [mssup]},
     {applications, [kernel, sasl, stdlib]},
     {mod, {msapp, [1, 0]}}

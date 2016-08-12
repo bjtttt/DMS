@@ -38,18 +38,17 @@
 -define(CONN_STAT_DISC_TIMEOUT,        12).     % Disconnection count due to VDR timeout
 -define(CONN_STAT_DISC_UNREG,          13).     % Disconnection count due to VDR unregistry
 -define(CONN_STAT_DISC_MSGEX,          14).     % Disconnection count due to MSG parsing exception
--define(CONN_STAT_DISC_GW,             15).     % Disconnection count due to a disconnection from gateway
--define(CONN_STAT_DISC_INVALID_MSG,    16).     % Disconnection count due to invalid MSG ID from VDR
--define(CONN_STAT_DISC_MSG_ERR,        17).     % Disconnection count due to VDR MSG parsing error
--define(CONN_STAT_DISC_UNK_MSG_ERR,    18).     % Disconnection count due to unknown VDR MSG error
--define(CONN_STAT_DISC_UNK_ERR,        19).     % Disconnection count due to unknown VDR error
--define(CONN_STAT_SPLIT_ERR,           20).     % Multi MSGes splitting error
--define(CONN_STAT_SERVER_MSG,          21).     % Count for MSGs from an unknown place instead of VDR
--define(CONN_STAT_INVALID_MSG,         22).     % Count for undefined-type MSGes
--define(CONN_STAT_TO_GW,               23).     % Count for MSGes to gateway
--define(CONN_STAT_FROM_GW,             24).     % Count for MSGes from gateway
--define(CONN_STAT_UNK_ERR,             25).     % Unknown VDR error
--define(CONN_STAT_INFO_COUNT,          26).     % Count for connection status information, should be of the last one and for an indication of the length
+-define(CONN_STAT_DISC_INVALID_MSG,    15).     % Disconnection count due to invalid MSG ID from VDR
+-define(CONN_STAT_DISC_MSG_ERR,        16).     % Disconnection count due to VDR MSG parsing error
+-define(CONN_STAT_DISC_UNK_MSG_ERR,    17).     % Disconnection count due to unknown VDR MSG error
+-define(CONN_STAT_DISC_UNK_ERR,        18).     % Disconnection count due to unknown VDR error
+-define(CONN_STAT_SPLIT_ERR,           19).     % Multi MSGes splitting error
+-define(CONN_STAT_SERVER_MSG,          20).     % Count for MSGs from an unknown place instead of VDR
+-define(CONN_STAT_INVALID_MSG,         21).     % Count for undefined-type MSGes
+-define(CONN_STAT_TO_GW,               22).     % Count for MSGes to gateway
+-define(CONN_STAT_FROM_GW,             23).     % Count for MSGes from gateway
+-define(CONN_STAT_UNK_ERR,             24).     % Unknown VDR error
+-define(CONN_STAT_INFO_COUNT,          25).     % Count for connection status information, should be of the last one and for an indication of the length
 
 %
 % Timeout definitions

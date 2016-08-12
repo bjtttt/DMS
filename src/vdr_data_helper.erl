@@ -1,11 +1,11 @@
 %
-% msghelper.erl
+% vdr_data_helper.erl
 %
 
 
--module(msg_helper).
+-module(vdr_data_helper).
 
--include("../../include/header.hrl").
+-include("../include/header.hrl").
 
 -export([split_msg_to_single/2]).
 
