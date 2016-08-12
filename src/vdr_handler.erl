@@ -210,7 +210,7 @@ handle_info({tcp, Socket, Data}, PrevState) ->
 							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_MSG_ERR);
 						ErrType == unvdrerror ->
 							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNK_MSG_ERR);
-						ErrType == exception ->
+						ErrType == msg_process_exception ->
 							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_MSGEX);
 						true ->
 							log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_UNK_ERR)
@@ -327,5 +327,5 @@ safe_process_vdr_msg(Socket, Msg, State) ->
         _:Ex ->
 			[ST] = erlang:get_stacktrace(),
             log:logvdr(error, State, "vdr_handler:safe_process_vdr_msg(...) Msg ~p~nexcption ~p~nStack trace ~p", [Msg, Ex, ST]),
-            {error, exception, State}
+            {error, msg_process_exception, State}
     end.

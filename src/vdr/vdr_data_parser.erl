@@ -37,7 +37,7 @@ process_data(State, Data) ->
         _:Why ->
             [ST] = erlang:get_stacktrace(),
             vdr_handler:logvdr(error, State, "parsing VDR data exception : ~p~ndata : ~p~nstack trace : ~p", [Why, Data, ST]),
-            {error, exception, State}
+            {error, msg_process_exception, State}
     end.
 
 get_data_binary(Data) when is_list(Data)->
@@ -73,7 +73,6 @@ do_process_data(State, Data) ->
             CalcParity = bxorbytelist(HeaderBody),
             if
                 CalcParity =/= Parity ->
-                    common:send_stat_err(State, parerr),
                     common:loginfo("Parity error (calculated)~p:(data)~p from ~p", [CalcParity, Parity, State#vdritem.addr]),
                     {error, msg_parity_error, State}
                 true ->
