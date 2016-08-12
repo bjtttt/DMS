@@ -46,23 +46,25 @@ get_data_binary(Data) when is_list(Data)->
 get_data_binary(Data) ->
     Data.
 
-%%%
-%%% Internal usage for parse_data(Socket, State, Data)
-%%% Return :
-%%%     {ok, HeadInfo, Res, State}
-%%%     {ignore, HeadInfo, State}
-%%%     {warning, HeadInfo, ErrorType, State}
-%%%     {error, formaterror/parityerror, State}
-%%%
-%%%     formaterror : Head/Tail is not 16#7e
-%%%     parityerror :
-%%%     warning     : error message/not supported/fail
-%%%     ignore      : not complete message (maybe this state is not necessary)
-%%%
-%%% HeadInfo = {ID, MsgIdx, Tel, CryptoType}
-%%%
-%%% What is Decoded, still in design
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Internal usage for parse_data(Socket, State, Data)
+% Return :
+%     {ok, HeadInfo, Res, State}
+%     {ignore, HeadInfo, State}
+%     {warning, HeadInfo, ErrorType, State}
+%     {error, formaterror/parityerror, State}
+%
+%     formaterror : Head/Tail is not 16#7e
+%     parityerror :
+%     warning     : error message/not supported/fail
+%     ignore      : not complete message (maybe this state is not necessary)
+%
+% HeadInfo = {ID, MsgIdx, Tel, CryptoType}
+%
+% What is Decoded, still in design
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_process_data(State, Data) ->
     case restore_7d_7e_msg(State, Data) of
         {ok, RawData} ->
@@ -149,11 +151,13 @@ do_process_data(State, Data) ->
             {error, formaterror, State}
     end.
 
-%%%
-%%% XOR a binary list
-%%% The caller must make sure of the length of data must be larger than or equal to 1
-%%% Input : Data is a binary list
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% XOR a binary list
+% The caller must make sure of the length of data must be larger than or equal to 1
+% Input : Data is a binary list
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 bxorbytelist(Data) ->
     Len = byte_size(Data),
     case Len of
@@ -170,9 +174,11 @@ bxorbytelist(Data) ->
             <<Res>>
     end.
 
-%%%
-%%% 0x7d0x1 -> 0x7d & 0x7d0x2 -> 0x7e
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% 0x7d0x1 -> 0x7d & 0x7d0x2 -> 0x7e
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 restore_7d_7e_msg(State, Data) ->
     Len = byte_size(Data),
     {Head, Remain} = split_binary(Data, 1),
@@ -196,18 +202,20 @@ restore_7d_7e_msg(State, Data) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
-    StoredMsg = State#vdritem.msg,
+    StoredMsges = State#vdritem.msg,
     % Get all msg packages with the same ID
-    MsgWithID = get_msg_with_id(StoredMsg, ID),        % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID == ID ]
+    % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID == ID ]
+    MsgesWithID = get_msg_with_id(StoredMsges, ID),
     % Get all msg packages without the same ID
-    MsgWithoutID = get_msg_without_id(StoredMsg, ID),  % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID =/= ID ]
+    % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID =/= ID ]
+    MsgesWithoutID = get_msg_without_id(StoredMsges, ID),
     {_LastID, MsgPackages} = State#vdritem.msgpackages,
     case MsgWithID of
         [] ->
-			MergedList = lists:merge([[ID,MsgIdx,Total,Idx,Body]], StoredMsg),
+			NewStoredMsges = lists:merge([[ID,MsgIdx,Total,Idx,Body]], StoredMsges),
             NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs([[ID,MsgIdx,Total,Idx,Body]])),
 			vdr_handler:logvdr(info, State, "new MSG packages 0 : ~p", NewMsgPackages]),
-    		NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
+    		NewState = State#vdritem{msg=NewStoredMsges, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
 			case check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) of

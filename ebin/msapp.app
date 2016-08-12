@@ -13,7 +13,9 @@
                 common,
                 vdr_data_parser,
                 vdr_data_processor,
-                mon_data_parser]},
+                mon_data_parser,
+                cchelper,
+                ccprocessor]},
     {registered, [mssup]},
     {applications, [kernel, sasl, stdlib]},
     {mod, {msapp, [1, 0]}}
