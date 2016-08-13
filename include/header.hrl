@@ -33,7 +33,7 @@
 -define(CONN_STAT_DISC_CLI,             7).     % Disconnection count due to VDR requirement
 -define(CONN_STAT_DISC_LEN,             8).     % Disconnection count due to MSG length error
 -define(CONN_STAT_DISC_PARITY,          9).     % Disconnection count due to MSG parity error
--define(CONN_STAT_DISC_REST,           10).     % Disconnection count due to other MSG error, such as format and etc., which will lead to parse error
+-define(CONN_STAT_DISC_RESTORE,        10).     % Disconnection count due to MSG restore error
 -define(CONN_STAT_DISC_PACK,           11).     % Disconnection count due to sub MSGes, which can be combine to one big MSG, package index error
 -define(CONN_STAT_DISC_TIMEOUT,        12).     % Disconnection count due to VDR timeout
 -define(CONN_STAT_DISC_UNREG,          13).     % Disconnection count due to VDR unregistry

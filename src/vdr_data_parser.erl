@@ -8,7 +8,8 @@
 
 -include("../include/header.hrl").
 
--export([process_data/2, bxorbytelist/1]).
+-export([safe_parse_data/2,
+         bxorbytelist/1]).
 
 %%%
 %%% check 0x7d
@@ -31,10 +32,10 @@
 %     ignore      : not complete message (maybe this state is not necessary)
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-process_data(State, Data) ->
+safe_parse_data(State, Data) ->
     %DataDebug = <<126,2,0,0,46,1,86,121,16,51,112,0,14,0,0,0,0,0,0,0,17,0,0,0,0,0,0,0,0,0,0,0,0,0,0,19,3,20,0,64,34,1,4,0,0,0,0,2,2,0,0,3,2,0,0,4,2,0,0,42,126>>,
     NewData = get_data_binary(Data),
-    try do_process_data(State, NewData)
+    try do_parse_data(State, NewData)
     catch
         _:Why ->
             [ST] = erlang:get_stacktrace(),
@@ -57,8 +58,8 @@ get_data_binary(Data) ->
 %     {warning, HeadInfo, ErrorType, State}
 %     {error, formaterror/parityerror, State}
 %
-%     formaterror : Head/Tail is not 16#7e
-%     CONN_STAT_DISC_PARITY :
+%     CONN_STAT_DISC_RESTORE    : Head/Tail is not 16#7e
+%     CONN_STAT_DISC_PARITY     :
 %     warning     : error message/not supported/fail
 %     ignore      : not complete message (maybe this state is not necessary)
 %
@@ -67,15 +68,18 @@ get_data_binary(Data) ->
 % What is Decoded, still in design
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_process_data(State, Data) ->
+do_parse_data(State, Data) ->
     case restore_7d_7e_msg(State, Data) of
+        error ->
+            % restore_7d_7e_msg will display error message
+            {error, ?CONN_STAT_DISC_RESTORE, State};
         {ok, RawData} ->
             NoParityLen = byte_size(RawData) - 1,
             {HeaderBody, Parity} = split_binary(RawData, NoParityLen),
-            CalcParity = bxorbytelist(HeaderBody),
+            CalcParity = vdr_helper:bxorbytelist(HeaderBody),
             if
                 CalcParity =/= Parity ->
-                    log:logvdr(error, State, "parity error : calculated ~p =/= data ~p", [CalcParity, Parity, State#vdritem.addr]),
+                    mslog:log_vdr_info(error, State, "parity error : calculated ~p, data ~p", [CalcParity, Parity]),
                     {error, ?CONN_STAT_DISC_PARITY, State};
                 true ->
                     <<ID:16, Property:16, Tel:48, MsgIdx:16, Tail/binary>> = HeaderBody,
@@ -88,7 +92,7 @@ do_process_data(State, Data) ->
                             ActBodyLen = byte_size(Body),
                             if
                                 BodyLen == ActBodyLen ->
-                                    case vdr_data_processor:parse_msg_body(ID, Body) of
+                                    case vdr_msg_processor:parse_msg_body(State, ID, Body) of
                                         {ok, Result} ->
                                             {ok, HeadInfo, Result, State};
                                         {error, msgerror} ->
@@ -146,38 +150,20 @@ do_process_data(State, Data) ->
                                     end
                             end
                     end
-            end;
-        error ->
-			common:send_stat_err(State, resterr),
-            {error, formaterror, State}
+            end
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% XOR a binary list
-% The caller must make sure of the length of data must be larger than or equal to 1
-% Input : Data is a binary list
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-bxorbytelist(Data) ->
-    Len = byte_size(Data),
-    case Len of
-        1 ->
-            Data;
-        2 ->
-            <<HInt:8,TInt:8>> = Data,
-            Res = HInt bxor TInt,
-            <<Res>>;
-        _ ->
-            <<HInt:8, T/binary>> = Data,
-            <<TInt:8>> = bxorbytelist(T),
-            Res = HInt bxor TInt,
-            <<Res>>
-    end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% 0x7d0x1 -> 0x7d & 0x7d0x2 -> 0x7e
+% Description :
+%   0x7d and 0x7e are taken as 0x7d0x1 and 0x7d0x2 in transfer. This method is used to restore 0x7d0x1 and 0x7d0x2 to 0x7d and 0x7e
+%   0x7d0x1 -> 0x7d & 0x7d0x2 -> 0x7e
+% Parameter :
+%       State   :
+%       Data    :
+% Return :
+%       {ok, FinalResult}
+%       error
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 restore_7d_7e_msg(State, Data) ->
@@ -192,7 +178,7 @@ restore_7d_7e_msg(State, Data) ->
 		    FinalResult = binary:replace(Result, <<245,244,243,242,241,240,241,242,243,244,245>>, <<126>>, [global]),
             {ok, FinalResult};
         true ->
-            vdr_handler:logvdr(error, State, "wrong data head/tail : Head : ~p / Tail : ~p",[Head, Tail]),
+            mslog:log_vdr_info(error, State, "wrong data head/tail : ~p / ~p",[Head, Tail]),
             error
     end.
 

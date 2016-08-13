@@ -238,15 +238,8 @@ process_vdr_data(Socket, Data, State) ->
                             
                             {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
                         _ ->
-                            common:loginfo("Invalid message from registered/authenticated VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p) MSG ID : ~p", 
-                                           [NewState#vdritem.addr, 
-                                            NewState#vdritem.id, 
-                                            NewState#vdritem.serialno, 
-                                            NewState#vdritem.auth, 
-                                            NewState#vdritem.vehicleid, 
-                                            NewState#vdritem.vehiclecode, 
-                                            ID]),
-                            {error, invalidmsgerror, NewState}
+                            mslog:log_vdr_info(error, NewState, "unknown message id ~p", [ID]),
+                            {error, ?CONN_STAT_DISC_UNK_MSG_ERR, NewState}
                     end
             end;
         {ignore, HeaderInfo, NewState} ->
@@ -318,6 +311,7 @@ process_vdr_data(Socket, Data, State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
+%   Save the VDR online time locally
 % Parameter :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -329,7 +323,7 @@ save_online_msg(VID, State) ->
             {Hour,Min,Second} = erlang:time(),
             VDROnlinePid ! {add, VID, {Year,Month,Day,Hour,Min,Second}};
         true ->
-            logvdr(error, State, "save_online_msg(...) : no VDR online process id", [])
+            mslog:log_vdr_info(error, State, "vdr_processor:save_online_msg(...) : no VDR online process id")
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -348,43 +342,13 @@ convert_crytotype(CryptoType) ->
             false
     end.
 
-check_vdrdbtable_auth(State, Auth) when is_binary(Auth) ->
-    Pid = State#vdritem.pid,
-    DBOperationPid = State#vdritem.dboperid,
-    DBOperationPid ! {Pid, lookup, vdrdbtable, Auth},
-    receive
-        {Pid, Res} ->
-            %Res = ets:lookup(vdrdbtable, Auth),
-            %common:loginfo("Res for Auth: ~p, ~p", [Res, Auth]),
-            case Res of
-                [] ->
-                    error;
-                [VDRDBItem] ->
-                    {ok, VDRDBItem}
-            end
-    after ?DB_RESP_TIMEOUT * 3 ->
-            error
-    end;
-check_vdrdbtable_auth(State, Auth) when is_list(Auth) ->
-    Pid = State#vdritem.pid,
-    DBOperationPid = State#vdritem.dboperid,
-    DBOperationPid ! {Pid, lookup, vdrdbtable, list_to_binary(Auth)},
-    receive
-        {Pid, Res} ->
-            %Res = ets:lookup(vdrdbtable, list_to_binary(Auth)),
-            %common:loginfo("Res for Auth: ~p, ~p", [Res, Auth]),
-            case Res of
-                [] ->
-                    error;
-                [VDRDBItem] ->
-                    {ok, VDRDBItem}
-            end
-    after ?DB_RESP_TIMEOUT * 3 ->
-            error
-    end;
-check_vdrdbtable_auth(_State, _Auth) ->
-    error.
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+% Return :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 find_missing_msgidx(RequiredId, MsgPackages) when is_integer(RequiredId),
                                                   RequiredId > -1,
                                                   is_list(MsgPackages),

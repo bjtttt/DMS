@@ -1,13 +1,13 @@
 %
-% vdr_data_helper.erl
+% vdr_helper.erl
 %
 
-
--module(vdr_data_helper).
+-module(vdr_helper).
 
 -include("../include/header.hrl").
 
--export([split_msg_to_single/2]).
+-export([split_msg_to_single/1,
+       bxorbytelist/1]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -21,7 +21,7 @@
 %     Flag    : == 1 byte
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-split_msg_to_single(Msg, Tag) ->
+split_msg_to_single(Msg) ->
     List = binary_to_list(Msg),
     Len = length(List),
     if
@@ -61,3 +61,27 @@ convert_bin_array_to_list_array(Bins) when is_list(Bins),
     end;
 convert_bin_array_to_list_array(_Bins) ->
     [].
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% XOR a binary list
+% The caller must make sure of the length of data must be larger than or equal to 1
+% Input : Data is a binary list
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+bxorbytelist(Data) ->
+    Len = byte_size(Data),
+    case Len of
+        1 ->
+            Data;
+        2 ->
+            <<HInt:8,TInt:8>> = Data,
+            Res = HInt bxor TInt,
+            <<Res>>;
+        _ ->
+            <<HInt:8, T/binary>> = Data,
+            <<TInt:8>> = bxorbytelist(T),
+            Res = HInt bxor TInt,
+            <<Res>>
+    end.
+

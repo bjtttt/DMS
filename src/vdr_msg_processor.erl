@@ -26,12 +26,12 @@
 
 -include("../include/header.hrl").
 
--export([parse_msg_body/2]).
-
--export([create_gen_resp/3,
+-export([parse_msg_body/3,
+         create_gen_resp/3,
          create_final_msg/4,
-         create_final_msg/6,
-         create_resend_subpack_req/3,
+         create_final_msg/6]).
+
+-export([create_resend_subpack_req/3,
          create_reg_resp/3,
 	     create_set_term_args/2,
          create_term_query_args/0,
@@ -79,7 +79,7 @@
 
 -export([get_2_number_integer_from_oct_string/1]).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % ID        : 
 % MsgIdx    : 
@@ -89,7 +89,7 @@
 %				binary
 %				[binary, binary, ...]
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 create_final_msg(ID, Tel, MsgIdx, Data) when is_binary(Data),
 										     byte_size(Data) =< ?MAX_SINGLE_MSG_LEN ->
 	Len = byte_size(Data),
@@ -150,14 +150,17 @@ create_final_msg(ID, Tel, MsgIdx, Data, PTotal, PIdx) when is_binary(Data),
 create_final_msg(_ID, _Tel, _MsgIdx, _Data, _PTotal, _PIdx) ->
 	<<>>.
 
-%%%
-%%% Parse terminal message body
-%%% Return :
-%%%     {ok, Result}            - Result is a complex list, such as [[...],[...],[...],...]
-%%%     {error, msgerr}
-%%%     {error, unsupported}
-%%%
-parse_msg_body(ID, Body) ->
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parse terminal message body
+% Return :
+%     {ok, Result}            - Result is a complex list, such as [[...],[...],[...],...]
+%     {error, msgerr}
+%     {error, unsupported}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+parse_msg_body(State, ID, Body) ->
     try do_parse_msg_body(ID, Body)
     catch
         _:Exception ->
