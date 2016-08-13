@@ -32,7 +32,7 @@
 -define(CONN_STAT_DISC_ERR_CNT,         6).     % Disconnection count due to VDR commununication error count reaches the MAX
 -define(CONN_STAT_DISC_CLI,             7).     % Disconnection count due to VDR requirement
 -define(CONN_STAT_DISC_LEN,             8).     % Disconnection count due to MSG length error
--define(CONN_STAT_DISC_PARITY,          9).     % Disconnection count due to MSG parity error
+-define(CONN_STAT_DISC_PARSE_PARITY,    9).     % Disconnection count due to MSG parity error
 -define(CONN_STAT_DISC_RESTORE,        10).     % Disconnection count due to MSG restore error
 -define(CONN_STAT_DISC_PACK,           11).     % Disconnection count due to sub MSGes, which can be combine to one big MSG, package index error
 -define(CONN_STAT_DISC_TIMEOUT,        12).     % Disconnection count due to VDR timeout
@@ -48,7 +48,14 @@
 -define(CONN_STAT_TO_GW,               22).     % Count for MSGes to gateway
 -define(CONN_STAT_FROM_GW,             23).     % Count for MSGes from gateway
 -define(CONN_STAT_UNK_ERR,             24).     % Unknown VDR error
--define(CONN_STAT_INFO_COUNT,          25).     % Count for connection status information, should be of the last one and for an indication of the length
+-define(CONN_STAT_PARSE_ERROR,         25).     % Parsing : error
+-define(CONN_STAT_PARSE_EXCEPTION,     26).     % Parsing : exception
+-define(CONN_STAT_PARSE_UNSUPPORTED_ID,27).     % Parsing : unsupported message id
+-define(CONN_STAT_PARSE_LEN_MISMATCH,  28).     % Parsing : calculated length =/= actual length
+-define(CONN_STAT_PARSE_TOTAL_ERROR,   29).     % Parsing : total package number =< 1 for multiple messages
+-define(CONN_STAT_PARSE_INDEX_SMALL,   30).     % Parsing : current package index < 1 for multiple messages
+-define(CONN_STAT_PARSE_INDEX_LARGE,   31).     % Parsing : current package index > total package number for multiple messages
+-define(CONN_STAT_INFO_COUNT,          32).     % Count for connection status information, should be of the last one and for an indication of the length
 
 %
 % Timeout definitions

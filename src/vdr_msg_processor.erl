@@ -156,23 +156,23 @@ create_final_msg(_ID, _Tel, _MsgIdx, _Data, _PTotal, _PIdx) ->
 % Parse terminal message body
 % Return :
 %     {ok, Result}            - Result is a complex list, such as [[...],[...],[...],...]
-%     {error, msgerr}
+%     {error, parseerror}
 %     {error, unsupported}
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 parse_msg_body(State, ID, Body) ->
-    try do_parse_msg_body(ID, Body)
+    try do_parse_msg_body(State, ID, Body)
     catch
         _:Exception ->
 			[ST] = erlang:get_stacktrace(),
-            common:loginfo("vdr_data_processor:do_parse_msg_body(ID=~p, Body) exception : ~p~nStack trace :~n~p", [ID, Exception, ST]),
-            {error, msgerr}
+            mslog:log_vdr_info(error, State, "vdr_msg_processor:parse_msg_body(...) msg id ~p, exception : ~p~nStack trace :~n~p", [ID, Exception, ST]),
+            {error, parseexception}
     end.
 
 %%%
 %%% Internal method for parse_msg_body(ID, Body)
 %%%
-do_parse_msg_body(ID, Body) ->
+do_parse_msg_body(State, ID, Body) ->
     case ID of
         16#1    ->                          
             parse_gen_resp(Body);
@@ -227,7 +227,8 @@ do_parse_msg_body(ID, Body) ->
         16#a00  ->
             parse_term_rsa(Body);
         _ ->
-            {error, unsupported}
+           mslog:log_vdr_info(error, State, "vdr_msg_processor:do_parse_msg_body(...) : unsupported message id ~p", [ID]),
+           {error, unsupported}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -250,14 +251,14 @@ parse_gen_resp(Bin) ->
             <<RespIdx:?LEN_WORD, ID:?LEN_WORD, Res:?LEN_BYTE>> = Bin,
             if
                 Res > 3 ->
-                    {error, msgerr};
+                    {error, parseerror};
                 Res < 0 ->
-                    {error, msgerr};
+                    {error, parseerror};
                 true ->
                     {ok, {RespIdx, ID, Res}}
             end;
         Len =/=(5 * ?LEN_BYTE) ->
-            {error, msgerr}
+            {error, parseerror}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -339,7 +340,7 @@ parse_reg(Bin) ->
     Len = bit_size(Bin),
     if
         Len =< ((2+2+5+20+7+1)*?LEN_BYTE) ->
-            {error, msgerr};
+            {error, parseerror};
         true ->
             <<Province:?LEN_WORD, City:?LEN_WORD, Producer:(5*?LEN_BYTE), VDRModel:(20*?LEN_BYTE), VDRID:(7*?LEN_BYTE), LicColor:?LEN_BYTE, Tail/binary>> = Bin,
             LicID = binary_to_list(Tail),
@@ -407,7 +408,7 @@ parse_check_auth(Bin) ->
     Len = bit_size(Bin),
     if
         Len < 1 ->
-            {error, msgerr};
+            {error, parseerror};
         true ->
             Auth = binary_to_list(Bin),
             {ok, {Auth}}
@@ -715,7 +716,7 @@ parse_query_term_args_response(Bin) ->
     Len = byte_size(Bin),
     if
         Len =< ((2+1)*?LEN_BYTE) ->
-            {error, msgerr};
+            {error, parseerror};
         true ->
             <<RespIdx:?LEN_WORD, Count:?LEN_BYTE, Tail/binary>> = Bin,
             List = extract_term_args_resp(Tail),
@@ -724,7 +725,7 @@ parse_query_term_args_response(Bin) ->
                 ActLen == Count ->
                     {ok, {RespIdx, ActLen, List}};
                 true ->
-                    {error, msgerr}
+                    {error, parseerror}
             end
     end.
 
@@ -1137,14 +1138,14 @@ parse_query_term_prop_response(Bin) ->
     Len = byte_size(Bin),
     if
         Len < (2+5+20+7+10+1+1+1+1+2) ->       % The last 2 is for HwVer and FwVer
-            {error,msgerr};
+            {error,parseerror};
         true ->
             <<Type:?LEN_WORD, ProId:(5*?LEN_BYTE), Model:(20*?LEN_BYTE), TerId:(7*?LEN_BYTE), ICCID:(10*?LEN_BYTE), HwVerLen:?LEN_BYTE, Tail0/binary>> = Bin,
             HwVerBinLen = ?LEN_BYTE*HwVerLen,
             Len0 = byte_size(Tail0),
             if
                 Len0 < (HwVerLen+1+1+1+1) ->   % The last 1 is for FwVer
-                    {error, msgerr};
+                    {error, parseerror};
                 true ->
                     <<HwVer:HwVerBinLen, FwVerLen:?LEN_BYTE, Tail1/binary>> = Tail0,
                     FwVerBinLen = ?LEN_BYTE*FwVerLen,
@@ -1154,7 +1155,7 @@ parse_query_term_prop_response(Bin) ->
                             <<FwVer:FwVerBinLen, GNSS:?LEN_BYTE, Prop:?LEN_BYTE>> = Tail1,
                             {ok, {Type, ProId, Model, TerId, ICCID, HwVerLen, HwVer, FwVerLen, FwVer, GNSS, Prop}};
                         true ->
-                            {error, msgerr}
+                            {error, parseerror}
                     end
             end
     end.
@@ -1206,15 +1207,15 @@ parse_update_result_notification(Bin) ->
                 Res >= 0, Res =< 2 ->
                     if
                         Type =/= 0 andalso Type =/= 12 andalso Type =/= 52 ->
-                            {error, msgerr};
+                            {error, parseerror};
                         true ->
                             {ok, {Type, Res}}
                     end;
                 true ->
-                    {error, msgerr}
+                    {error, parseerror}
             end;
         true ->
-            {error, msgerr}
+            {error, parseerror}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1228,7 +1229,7 @@ parse_position_info_report(Bin) ->
     MinLen = 4+4+4+4+2+2+2+6,
     if
         BinLen < MinLen ->
-            {error, msgerr};
+            {error, parseerror};
         BinLen == MinLen ->
             <<AlarmSym:?LEN_DWORD, State:?LEN_DWORD, Lat:?LEN_DWORD, Lon:?LEN_DWORD, Height:?LEN_WORD, Speed:?LEN_WORD, Direction:?LEN_WORD, Time:(6*?LEN_BYTE)>> = Bin,
             H = [AlarmSym, State, Lat, Lon, Height, Speed, Direction, Time],
@@ -1240,7 +1241,7 @@ parse_position_info_report(Bin) ->
             AppInfo = get_appended_info(Tail),
             case AppInfo of
                 error ->
-                    {error, msgerr};
+                    {error, parseerror};
                 _ ->
                     {ok, {H, AppInfo}}
             end
@@ -1431,8 +1432,8 @@ parse_query_position_response(Bin) ->
     case parse_position_info_report(PosMsgResp) of
 		{ok, PosInfo} ->
     		{ok, {RespFlowIdx, PosInfo}};
-		_ -> %{error, msgerr} ->
-			{error, msgerr}
+		_ -> %{error, parseerror} ->
+			{error, parseerror}
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1613,7 +1614,7 @@ parse_question_resp(Bin) ->
             <<Number:16,Id:8>> = <<Bin:24>>,
             {ok,{Number,Id}};
         true ->
-            {error, msgerr}
+            {error, parseerror}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1639,7 +1640,7 @@ parse_msg_proorcancel(Bin) ->
             <<MsgType:8,POC:8>> = <<Bin:16>>,
             {ok,{MsgType,POC}};
         true ->
-            {error, msgerr}
+            {error, parseerror}
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2408,10 +2409,10 @@ parse_multi_media_event_update(Bin) when is_binary(Bin),
 		Id > 0 andalso Type >= 0 andalso Type =< 2 andalso Code >= 0 andalso Code =< 4 andalso EICode >= 0 andalso EICode =< 7 ->
 		    {ok, {Id, Type, Code, EICode, PipeId}};
 		true ->
-			{error, msgerr}
+			{error, parseerror}
 	end;
 parse_multi_media_event_update(_Bin) ->
-	{error, msgerr}.
+	{error, parseerror}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -2427,13 +2428,13 @@ parse_multi_media_data_update(Bin) when is_binary(Bin),
                 {ok, Resp} ->
 		            {ok, {Id, Type, Code, EICode, PipeId, Resp, Pack}};
                 _ ->
-                    {error, msgerr}
+                    {error, parseerror}
             end;
 		true ->
-			{error, msgerr}
+			{error, parseerror}
 	end;
 parse_multi_media_data_update(_Bin) ->
-	{error, msgerr}.
+	{error, parseerror}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -2516,7 +2517,7 @@ parse_imm_photo_cmd_response(Bin) ->
     Len = bit_size(Bin),
     if
         Len < (5*?LEN_BYTE) ->
-            {error, msgerr};
+            {error, parseerror};
         true ->
             <<RespIdx:?LEN_WORD, Res:?LEN_BYTE, Count:?LEN_WORD, Tail/binary>> = Bin,
             case Res of
@@ -2527,7 +2528,7 @@ parse_imm_photo_cmd_response(Bin) ->
                         Count == ActLen ->
                             {ok, {RespIdx, Res, ActLen, List}};
                         true ->
-                            {error, msgerr}
+                            {error, parseerror}
                     end;
                 1 ->
                     ActLen = bit_size(Tail),
@@ -2535,7 +2536,7 @@ parse_imm_photo_cmd_response(Bin) ->
                         ActLen == 0 ->
                             {ok, {RespIdx, Res, 0, []}};
                         true ->
-                            {error, msgerr}
+                            {error, parseerror}
                     end;
                 2 ->
                     ActLen = bit_size(Tail),
@@ -2543,10 +2544,10 @@ parse_imm_photo_cmd_response(Bin) ->
                         ActLen == 0 ->
                             {ok, {RespIdx, Res, 0, []}};
                         true ->
-                            {error, msgerr}
+                            {error, parseerror}
                     end;
                 _ ->
-                    {error, msgerr}
+                    {error, parseerror}
         end
     end.
 
@@ -2654,10 +2655,10 @@ parse_stomuldata_response(Bin) when is_binary(Bin),
 		len == Count ->
     		{ok, {FlowNum, Len, Data}};
 		true ->
-			{error, msgerr}
+			{error, parseerror}
 	end;
 parse_stomuldata_response(_Bin) ->
-	{error, msgerr}.
+	{error, parseerror}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -2809,7 +2810,7 @@ parse_data_ul_transparent(Bin) when is_binary(Bin),
     <<Type:?LEN_BYTE,Con/binary>> = Bin,
     {ok,{Type,Con}};
 parse_data_ul_transparent(_Bin) ->
-	{error, msgerr}.
+	{error, parseerror}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

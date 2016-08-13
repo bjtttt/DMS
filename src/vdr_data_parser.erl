@@ -80,7 +80,7 @@ do_parse_data(State, Data) ->
             if
                 CalcParity =/= Parity ->
                     mslog:log_vdr_info(error, State, "parity error : calculated ~p, data ~p", [CalcParity, Parity]),
-                    {error, ?CONN_STAT_DISC_PARITY, State};
+                    {error, ?CONN_STAT_DISC_PARSE_PARITY, State};
                 true ->
                     <<ID:16, Property:16, Tel:48, MsgIdx:16, Tail/binary>> = HeaderBody,
                     <<_Reserved:2, Pack:1, CryptoType:3, BodyLen:10>> = <<Property:16>>,
@@ -92,17 +92,25 @@ do_parse_data(State, Data) ->
                             ActBodyLen = byte_size(Body),
                             if
                                 BodyLen == ActBodyLen ->
-                                    case vdr_msg_processor:parse_msg_body(State, ID, Body) of
+                                    case vdr_msg_processor:parse_msg_body(ID, Body) of
                                         {ok, Result} ->
                                             {ok, HeadInfo, Result, State};
-                                        {error, msgerror} ->
+                                        {error, parseerror} ->
+                                            mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_ERROR),
+                                            mslog:log_vdr_info(error, State, "vdr_data_processor:do_parse_data(...) : parsing message (id ~p) fails, data ~p", [ID, Data]),
+                                            {warning, HeadInfo, parseerror, State};
+                                        {error, parseexception} ->
+                                            mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_EXCEPTION),
+                                            % Don't need display message here because vdr_msg_processor:parse_msg_body(...) has already done it.
                                             {warning, HeadInfo, ?P_GENRESP_ERRMSG, State};
                                         {error, unsupported} ->
-                                            {warning, HeadInfo, ?P_GENRESP_NOTSUPPORT, State}
+                                            mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_UNSUPPORTED_ID),
+                                            % Don't need display message here because vdr_msg_processor:parse_msg_body(...) has already done it.
+                                            {warning, HeadInfo, ?P_GENRESP_ERRMSG, State}
                                     end;
                                 BodyLen =/= ActBodyLen ->
-									common:send_stat_err(State, lenerr),
-                                    common:loginfo("Length error for msg (~p) from (~p) : (Field)~p:(Actual)~p", [MsgIdx, State#vdritem.addr, BodyLen, ActBodyLen]),
+									mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_LEN_MISMATCH),
+                                    mslog:log_vdr_info(error, State, "vdr_data_processor:do_parse_data(...) : message id ~p, calculated length ~p =/= actual length ~p, data ~p", [ID, BodyLen, ActBodyLen, Data]),
                                     {warning, HeadInfo, ?P_GENRESP_ERRMSG, State}
                             end;
                         1 ->
@@ -112,18 +120,18 @@ do_parse_data(State, Data) ->
                             <<Total:16,Index:16>> = <<PackInfo:32>>,
                             if
                                 Total =< 1 ->
-									common:send_stat_err(State, packerr),
-                                    common:loginfo("Total error for msg (~p) from (~p) : ~p", [MsgIdx, State#vdritem.addr, Total]),
+									mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_TOTAL_ERROR),
+                                    mslog:log_vdr_info(error, State, "wrong total number ~p for msg id ~p : data ~p", [Total, ID, Data]),
                                     {warning, HeadInfo, ?P_GENRESP_ERRMSG, State};
                                 Total > 1 ->
                                     if
                                         Index < 1 ->
-											common:send_stat_err(State, packerr),
-                                            common:loginfo("Index error for msg (~p) from (~p) : (Index)~p", [MsgIdx, State#vdritem.addr, Index]),
+											mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_INDEX_SMALL),
+                                            common:loginfo("wrong index ~p for msg id ~p : data ~p", [Index, ID, Data]),
                                             {warning, HeadInfo, ?P_GENRESP_ERRMSG, State};
                                         Index > Total ->
-											common:send_stat_err(State, packerr),
-                                            common:loginfo("Index error for msg (~p) from (~p) : (Total)~p:(Index)~p", [MsgIdx, State#vdritem.addr, Total, Index]),
+											mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_INDEX_LARGE),
+                                            common:loginfo("wrong index ~p is larger than total number ~p for msg id ~p : data ~p", [Index, Total, ID, Data]),
                                             {warning, HeadInfo, ?P_GENRESP_ERRMSG, State};
                                         Index =< Total ->
                                             if
