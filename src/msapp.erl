@@ -32,7 +32,7 @@ start(_StartType, StartArgs) ->
         Len =:= 2 ->
             startserver(StartArgs);
         true ->
-            log:loginfo("Parameter count error : ~p", [Len])
+            mslog:loginfo("Parameter count error : ~p", [Len])
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -76,44 +76,44 @@ startserver(StartArgs) ->
     ets:new(drivertable,  [set,         public, named_table, {keypos, #driverinfo.driverid},   {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(lastpostable, [set,         public, named_table, {keypos, #lastposinfo.vehicleid}, {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
-    log:loginfo("Tables are initialized."),
+    mslog:loginfo("Tables are initialized."),
     
     case file:make_dir(?DEF_LOG_PATH ++ "/log") of
         ok ->
-            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
         {error, DirEx0} ->
-            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
         ok ->
-            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
         {error, DirEx1} ->
-            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
         ok ->
-            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
         {error, DirEx2} ->
-            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/media") of
         ok ->
-            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
         {error, DirEx3} ->
-            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
     end,
     case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
         ok ->
-            log:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
         {error, DirEx4} ->
-            log:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
     end,
-    log:loginfo("Directories are initialized."),
+    mslog:loginfo("Directories are initialized."),
     
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
-            log:loghint("DMS starts initializing data structures."),
+            mslog:loghint("DMS starts initializing data structures."),
             case receive_redis_init_msg(UseRedis, 0) of
                 ok ->
                     LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
@@ -152,10 +152,10 @@ startserver(StartArgs) ->
                                             CCPid ! {self(), create},
                                             receive
                                                 created ->
-                                                    log:loghint("Code convertor table is created"),
+                                                    mslog:loghint("Code convertor table is created"),
                                                     HttpGpsPid = spawn(fun() -> httpgps:http_gps_deamon(?DEF_HTTPGPS_SERVER, uninit, 0, 0, 0, 0, 1) end),
                                                     ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-                                                    log:loghint("HTTP GPS process PID is ~p", [HttpGpsPid]),
+                                                    mslog:loghint("HTTP GPS process PID is ~p", [HttpGpsPid]),
                                                     case UseHttpGps of
                                                         1 ->
                                                             HttpGpsPid ! init;
@@ -173,10 +173,10 @@ startserver(StartArgs) ->
                     {error, "Message server fails to start : " ++ RedisError}                  
             end;
         ignore ->
-            log:logerr("Message server fails to start : ignore"),
+            mslog:logerr("Message server fails to start : ignore"),
             ignore;
         {error, Error} ->
-            log:logerr("Message server fails to start : ~p", [Error]),
+            mslog:logerr("Message server fails to start : ~p", [Error]),
             {error, Error}
     end.
 
@@ -191,7 +191,7 @@ startserver(StartArgs) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init_vdr_db_table() ->
     ets:delete_all_objects(vdrdbtable),
-    log:loghint("Init vdr db table.").
+    mslog:loghint("Init vdr db table.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -204,7 +204,7 @@ init_vdr_db_table() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init_driver_table() ->
     ets:delete_all_objects(drivertable),
-    log:loghint("Init driver table.").
+    mslog:loghint("Init driver table.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -217,7 +217,7 @@ init_driver_table() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init_last_pos_table() ->
     ets:delete_all_objects(lastpostable),
-    log:loghint("Init last position table.").
+    mslog:loghint("Init last position table.").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -227,7 +227,7 @@ init_last_pos_table() ->
 vdr_log_process(VDRList) ->
     receive
         stop ->
-            log:loghint("VDR log process stops.");
+            mslog:loghint("VDR log process stops.");
         reset ->
             vdr_log_process([]);
         {set, VID} ->
@@ -257,7 +257,7 @@ vdr_log_process(VDRList) ->
                     vdr_log_process(VDRList)
             end;
         _ ->
-            log:loghint("VDR log process : unknown message"),
+            mslog:loghint("VDR log process : unknown message"),
             vdr_log_process(VDRList)
     end.
 
@@ -282,9 +282,9 @@ save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime) ->
                     end,
                     file:close(IOFile);
                 {error, Reason} ->
-                    log:logerr("Cannot open ~p : ~p", [File, Reason]);
+                    mslog:logerr("Cannot open ~p : ~p", [File, Reason]);
                 _ ->
-                    log:logerr("Cannot open ~p : unknown", [File])
+                    mslog:logerr("Cannot open ~p : unknown", [File])
             end;
         true ->
             ok
@@ -300,7 +300,7 @@ save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime) ->
 vdr_online_table_process(VDROnlineList, VDROfflineList) ->
     receive
         stop ->
-            log:loghint("VDR online process stops.");
+            mslog:loghint("VDR online process stops.");
         reset ->
             vdr_online_table_process([], []);
         {add, VID, DateTime} ->
@@ -374,7 +374,7 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
             ListExclVIDOff = [{VDRID, DTList} || {VDRID, DTList} <- VDROfflineList, VDRID =/= VID],
             vdr_online_table_process(ListExclVIDOn, ListExclVIDOff);
         _ ->
-            log:loghint("VDR online process : unknown message"),
+            mslog:loghint("VDR online process : unknown message"),
             vdr_online_table_process(VDROnlineList, VDROfflineList)
     end.
 
@@ -387,7 +387,7 @@ vdr_online_table_process(VDROnlineList, VDROfflineList) ->
 vdrtable_insert_delete_process() ->
     receive
         stop ->
-            log:loghint("VDR table insert/delete process stops.");
+            mslog:loghint("VDR table insert/delete process stops.");
         {insert, Object} ->
             ets:insert(vdrtable, Object),
             vdrtable_insert_delete_process();
@@ -403,7 +403,7 @@ vdrtable_insert_delete_process() ->
             Pid ! {Pid, Res},
             vdrtable_insert_delete_process();
         _ ->
-            log:loghint("VDR table insert/delete process receive unknown msg."),
+            mslog:loghint("VDR table insert/delete process receive unknown msg."),
             vdrtable_insert_delete_process()
     end.
 
@@ -416,23 +416,23 @@ vdrtable_insert_delete_process() ->
 drivertable_insert_delete_process() ->
     receive
         stop ->
-            log:loghint("Driver table insert/delete process stops.");
+            mslog:loghint("Driver table insert/delete process stops.");
         {chkinsdriverinfo, {DriverID, LicNo, CertCode, VDRAuthCode}} ->        % Check and insert
             if
                 DriverID =:= undefined ->
-                    log:loghint("Cannot get driver item by driver undefined id");
+                    mslog:loghint("Cannot get driver item by driver undefined id");
                 true ->
                     DriverInfos = ets:match(drivertable, {'$1', DriverID, '_', '_', '_'}),
                     DriverInfosCount = length(DriverInfos),
                     if
                         DriverInfosCount =:= 0 orelse DriverInfosCount =:= 1 ->
                             DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
-                            log:lognone("Insert new driver item : ~p", [DriverInfoItem]),
+                            mslog:lognone("Insert new driver item : ~p", [DriverInfoItem]),
                             ets:insert(drivertable, DriverInfoItem);
                         true ->
                             ets:delete(drivertable, DriverID),
                             DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode, vdrauthcode=VDRAuthCode},
-                            log:lognone("Get ~p driver item by driver id ~p and re-create a new driver item : ~p", [DriverInfosCount, DriverID, DriverInfoItem]),
+                            mslog:lognone("Get ~p driver item by driver id ~p and re-create a new driver item : ~p", [DriverInfosCount, DriverID, DriverInfoItem]),
                             ets:insert(drivertable, DriverInfoItem)
                     end
             end,
@@ -446,7 +446,7 @@ drivertable_insert_delete_process() ->
                     DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNo, certcode=CertCode},
                     ets:insert(drivertable, DriverInfoItem);
                 true ->
-                    log:lognone("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode])
+                    mslog:lognone("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode])
             end,                    
             drivertable_insert_delete_process();
         {Pid, checkcc, {CertCode, VDRAuthCode}} ->        % CertCode must be binary
@@ -456,11 +456,11 @@ drivertable_insert_delete_process() ->
                 DriverInfosCount =:= 1 ->
                     [[DriverID, LicNoRec]] = DriverInfos,
                     DriverInfoItem = #driverinfo{driverid=DriverID, licno=LicNoRec, certcode=CertCode, vdrauthcode=VDRAuthCode},
-                    %log:loginfo("Change driver item online state : ~p", [DriverInfoItem]),
+                    %mslog:loginfo("Change driver item online state : ~p", [DriverInfoItem]),
                     ets:insert(drivertable, DriverInfoItem),
                     Pid ! {Pid, {DriverInfosCount, DriverID}};
                 true ->
-                    log:lognone("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode]),
+                    mslog:lognone("Get ~p driver item by certificate_code ~p", [DriverInfosCount, CertCode]),
                     Pid ! {Pid, {DriverInfosCount, undefined}}
             end,
             drivertable_insert_delete_process();
@@ -477,7 +477,7 @@ drivertable_insert_delete_process() ->
                             Pid ! {Pid, CertCodeBin}
                     end;
                 true ->
-                    log:lognone("Get ~p certificate code by vdr_auth_code ~p", [DriverInfosCount, VDRAuthCode]),
+                    mslog:lognone("Get ~p certificate code by vdr_auth_code ~p", [DriverInfosCount, VDRAuthCode]),
                     Pid ! {Pid, <<"">>}
             end,
             drivertable_insert_delete_process();
@@ -486,7 +486,7 @@ drivertable_insert_delete_process() ->
             Pid ! {Pid, Count},
             drivertable_insert_delete_process();
         _ ->
-            log:loghint("Driver table insert/delete process receive unknown msg."),
+            mslog:loghint("Driver table insert/delete process receive unknown msg."),
             drivertable_insert_delete_process()
     end.
 
@@ -499,7 +499,7 @@ drivertable_insert_delete_process() ->
 lastpostable_insert_delete_process() ->
     receive
         stop ->
-            log:loghint("Last pos table insert/delete process stops.");
+            mslog:loghint("Last pos table insert/delete process stops.");
         {Pid, get, VID} ->
             Infos = ets:match(lastpostable, {'_', VID, '$1', '$2'}),
             InfoCount = length(Infos),
@@ -528,7 +528,7 @@ lastpostable_insert_delete_process() ->
             Pid ! {Pid, Count},
             lastpostable_insert_delete_process();
         _ ->
-            log:loghint("Last pos table insert/delete process receive unknown msg."),
+            mslog:loghint("Last pos table insert/delete process receive unknown msg."),
             lastpostable_insert_delete_process()
     end.
 
@@ -595,7 +595,7 @@ stop(_State) ->
         _ ->
             VDROnlinePid ! stop
     end,
-    log:loghint("Message server stops.").
+    mslog:loghint("Message server stops.").
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

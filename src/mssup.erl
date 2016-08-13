@@ -85,7 +85,7 @@ stop_child_vdr(Pid) ->
         ok ->
             ok;
         {error, Reason} ->
-            log:logerr("mssup:stop_child_vdr(Pid : ~p) fails : ~p", [Pid, Reason]),
+            mslog:logerr("mssup:stop_child_vdr(Pid : ~p) fails : ~p", [Pid, Reason]),
             {error, Reason}
     end.
 
@@ -100,7 +100,7 @@ stop_child_mon(Pid) ->
         ok ->
             ok;
         {error, Reason} ->
-            log:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p~n", [Reason, Pid]),
+            mslog:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p~n", [Reason, Pid]),
             {error, Reason}
     end.
 
@@ -137,7 +137,7 @@ start_link() ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([]) ->
-    log:loghint("mssup:init([])"),
+    mslog:loghint("mssup:init([])"),
     [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
     % Id        : used to identify the child specification internally by the supervisor.
     %             Notice that this identifier on occations has been called "name". 
@@ -217,7 +217,7 @@ init([]) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([Module]) ->
-    log:loghint("mssup:init([Module]) : ~p", [Module]),
+    mslog:loghint("mssup:init([Module]) : ~p", [Module]),
     Instance = {
              	undefined,                 % Id       = internal id
                 {Module, start_link, []},  % StartFun = {M, F, A}

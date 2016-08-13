@@ -76,7 +76,7 @@ do_process_data(State, Data) ->
             if
                 CalcParity =/= Parity ->
                     log:logvdr(error, State, "parity error : calculated ~p =/= data ~p", [CalcParity, Parity, State#vdritem.addr]),
-                    {error, ?CONN_STAT_DISC_PARITY, State}
+                    {error, ?CONN_STAT_DISC_PARITY, State};
                 true ->
                     <<ID:16, Property:16, Tel:48, MsgIdx:16, Tail/binary>> = HeaderBody,
                     <<_Reserved:2, Pack:1, CryptoType:3, BodyLen:10>> = <<Property:16>>,

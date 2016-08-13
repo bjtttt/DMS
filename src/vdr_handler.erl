@@ -15,14 +15,14 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_link(CSock, Addr, LinkInfoPid) ->
-    log:lognone("vdr_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
+    mslog:logall("vdr_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
 	gen_server:start_link(?MODULE, [CSock, Addr, LinkInfoPid], []). 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([CSock, Addr, LinkInfoPid]) ->
-    log:lognone("vdr_handler:init(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
+    logger:logall("vdr_handler:init(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
     [{vdrtablepid, VDRTablePid}] = ets:lookup(msgservertable, vdrtablepid),
     [{drivertablepid, DriverTablePid}] = ets:lookup(msgservertable, drivertablepid),
@@ -44,8 +44,9 @@ init([CSock, Addr, LinkInfoPid]) ->
 					 httpgpspid=HttpGpsPid, 
                      vdrlogpid=VDRLogPid, 
                      vdronlinepid=VDROnlinePid},
-	log:log_vdr_statistics_info(State, ?CONN_STAT_CONN),
+	mslog:log_vdr_statistics_info(State, ?CONN_STAT_CONN),
     set_sock_opts(CSock),
+    logger:log_vdr_info(all, State, "Initilized."),
     {ok, State, ?VDR_MSG_TIMEOUT}.       
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -72,63 +73,6 @@ handle_cast(_Msg, State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
-%   Debug function. Save messages between the VDR and the gateway to disk.
-% Parameter :
-%       State   :
-%       FromVDR :
-%       Msg     :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-save_msg_4_vdr(State, FromVDR, Msg) ->
-    VDRID = State#vdritem.id,
-	StoredMsg = State#vdritem.storedmsg4save,
-	VDRLogPid = State#vdritem.vdrlogpid,
-	if
-		VDRID == undefined ->
-			{Year,Month,Day} = erlang:date(),
-			{Hour,Min,Second} = erlang:time(),
-			NewMsg = [{FromVDR, Msg, Year, Month, Day, Hour, Min, Second}],
-			NewStoredMsg = lists:merge([StoredMsg, NewMsg]),
-            log:log_vdr_info(none, State, "vdr_handler:save_msg_4_vdr(...) store data : ~p", NewStoredMsg),
-			State#vdritem{storedmsg4save=NewStoredMsg};
-		true ->
-            if
-                StoredMsg =/= [] ->
-                    log:log_vdr_info(none, State, "vdr_handler:save_msg_4_vdr(...) send stored data : ~p", StoredMsg),
-                    save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid);
-                true ->
-                    ok
-            end,
-			{Year,Month,Day} = erlang:date(),
-			{Hour,Min,Second} = erlang:time(),
-			DateTime = {Year, Month, Day, Hour, Min, Second},
-            log:log_vdr_info(none, State, "vdr_handler:save_msg_4_vdr(...) send data : ~p", Msg),
-			VDRLogPid ! {save, VDRID, FromVDR, Msg, DateTime},
-			State#vdritem{storedmsg4save=[]}
-	end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-%   Send messages to the message saving process.
-% Parameter :
-%       Pid, 
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-save_stored_msg_4_vdr(VDRID, StoredMsg, VDRLogPid) when VDRLogPid =/= undefined,
-                                                        is_list(StoredMsg),
-                                                        length(StoredMsg) > 0 ->
-	[H|T] = StoredMsg,
-	{FromVDR, MsgBin, Year, Month, Day, Hour, Min, Second} = H,
-	DateTime = {Year, Month, Day, Hour, Min, Second},
-	VDRLogPid ! {save, VDRID, FromVDR, MsgBin, DateTime},
-	save_stored_msg_4_vdr(VDRID, T, VDRLogPid);
-save_stored_msg_4_vdr(_VDRID, _StoredMsg, _VDRLogPid) ->
-	ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
 % Parameter :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,8 +80,8 @@ handle_info({tcp, Socket, Data}, PrevState) ->
 	LinkInfoPid = PrevState#vdritem.linkpid,
 	Pid = PrevState#vdritem.pid,
 	LinkInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
-	MidState = save_msg_4_vdr(PrevState, true, Data),
-    log:logvdr(all, MidState, "vdr_handler:handle_info(...) data ~p", [Data]),
+	MidState = mslog:save_msg_4_vdr(PrevState, true, Data),
+    mslog:logvdr(all, MidState, "vdr_handler:handle_info(...) data ~p", [Data]),
     % Update active time for VDR
 	DateTime = {erlang:date(), erlang:time()},
     State = MidState#vdritem{acttime=DateTime},
@@ -162,55 +106,46 @@ handle_info({tcp, Socket, Data}, PrevState) ->
 	Msgs = msghelper:split_msg_to_single(Data, 16#7e),
     case Msgs of
         [] ->
-			common:send_stat_err(State, ?CONN_STAT_SPLIT_ERR),
+			msmslog:log_vdr_statistics_info(State, ?CONN_STAT_SPLIT_ERR),
             ErrCount = State#vdritem.errorcount + 1,
-            log:log_vdr_info(error, State, "vdr_handler:handle_info(...) empty splitted data from ~p", [Msgs]),
+            mslog:log_vdr_info(error, State, "vdr_handler:handle_info(...) empty splitted data from ~p", [Msgs]),
             if
                 ErrCount >= ?MAX_VDR_ERR_COUNT ->
-					log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
+					mslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
                     {stop, ?CONN_STAT_DISC_ERR_CNT, State#vdritem{errorcount=ErrCount}};
                 true ->
                     set_sock_opts(Socket),
                     {noreply, State#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
             end;    
-        NewMsgs ->
-            case process_vdr_msges(Socket, Msgs, State) of
-                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                % Should revisit here for error message definitions
-                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                {error, vdrerror, NewState} ->
+        _ ->
+            case vdr_processor:process_vdr_msges(Socket, Msgs, State) of
+                {error, ErrNum, NewState} ->
                     ErrCount = NewState#vdritem.errorcount + 1,
-                    log:logvdr(error, State, "vdr_handler:handle_info(...) wrong splitted data : ~p", [NewMsgs]),
-                    common:send_stat_err(State, ?CONN_STAT_UNK_ERR),
+                    mslog:logvdr(error, State, "vdr_handler:handle_info(...) error ~p : ~p", [ErrNum, Msgs]),
+                    msmslog:log_vdr_statistics_info(State, ErrNum),
                     if
                         ErrCount >= ?MAX_VDR_ERR_COUNT ->
-                            common:send_stat_err(State, ?CONN_STAT_DISC_ERR_CNT),
+                            msmslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
                             {stop, ?CONN_STAT_DISC_ERR_CNT, NewState#vdritem{errorcount=ErrCount}};
                         true ->
                             set_sock_opts(Socket),
                             {noreply, NewState#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
                     end;
-                {error, ErrNum, NewState} ->
-                    log:log_vdr_statistics_info(State, ErrNum),
-                    {stop, ErrNum, NewState};
-                {warning, NewState} ->
-                    set_sock_opts(Socket),
-                    {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT};
                 {ok, NewState} ->
                     set_sock_opts(Socket),
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT}
             end
     end;
 handle_info({tcp_closed, _Socket}, State) -> 
-    log:logvdr(error, State, "vdr_handler:handle_info(...) tcp_closed", []),
-	log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_CLI),
+    mslog:logvdr(error, State, "vdr_handler:handle_info(...) tcp_closed", []),
+	mslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_CLI),
 	{stop, tcp_closed, State};
 handle_info(timeout, State) ->
-    log:logvdr(error, State, "vdr_handler:handle_info(...) timeout", []),
-	log:log_vdr_statistics_info(State, ?CONN_STAT_DISC_TIMEOUT),
+    mslog:logvdr(error, State, "vdr_handler:handle_info(...) timeout", []),
+	mslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_TIMEOUT),
 	{stop, vdrtimeout, State};
 handle_info(Info, State) ->   
-    log:logvdr(error, State, "vdr_handler:handle_info(...) unknown ~p", [Info]),
+    mslog:logvdr(error, State, "vdr_handler:handle_info(...) unknown ~p", [Info]),
 	{stop, unknown, State}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -219,20 +154,20 @@ handle_info(Info, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 terminate(Reason, State) ->
-    log:logvdr(info, State, "terminate(Reason ~p, State)", [Reason]),
+    mslog:logvdr(info, State, "terminate(Reason ~p, State)", [Reason]),
     Socket = State#vdritem.socket,
     VID = State#vdritem.id,
     VDRTablePid = State#vdritem.vdrtablepid,
     VDROnlinePid = State#vdritem.vdronlinepid,
     case Socket of
         undefined ->
-            log:logvdr(error, State, "vdr_handler:terminate(...) undefined socket", []);
+            mslog:logvdr(error, State, "vdr_handler:terminate(...) undefined socket", []);
         _ ->
             if 
                 VDRTablePid =/= undefined ->
                    common:send_vdr_table_operation(VDRTablePid, {delete, Socket});
                 true ->
-                    log:logvdr(error, State, "vdr_handler:terminate(...) undefined VDR table processor id", [])
+                    mslog:logvdr(error, State, "vdr_handler:terminate(...) undefined VDR table processor id", [])
             end
     end,
     if
@@ -243,65 +178,16 @@ terminate(Reason, State) ->
                 VID =/= undefined ->
                     VDROnlinePid ! {addoff, VID, {Year,Month,Day,Hour,Min,Second}};
                 true ->
-                    log:logvdr(error, State, "vdr_handler:terminate(...) undefined VDR id", [])
+                    mslog:logvdr(error, State, "vdr_handler:terminate(...) undefined VDR id", [])
             end;
         true ->
-            log:logvdr(error, State, "vdr_handler:terminate(...) undefined VDR  online process id", [])
+            mslog:logvdr(error, State, "vdr_handler:terminate(...) undefined VDR  online process id", [])
     end,
 	try gen_tcp:close(State#vdritem.socket)
     catch
         _:Ex ->
-            log:logvdr(error, State, "vdr_handler:terminate(...) gen_tcp:close(...) exception : ~p", [Ex])
+            mslog:logvdr(error, State, "vdr_handler:terminate(...) gen_tcp:close(...) exception : ~p", [Ex])
     end.
 
 code_change(_OldVsn, State, _Extra) ->    
 	{ok, State}.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-% Parameter :
-% Return :
-%     {ok, State}
-%     {warning, State}
-%     {error, vdrerror/invaliderror/systemerror/exception/unknown, State}  
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-process_vdr_msges(Socket, Msges, State) ->
-    [H|T] = Msges,
-    Result = safe_process_vdr_msg(Socket, H, State),
-    case T of
-        [] ->
-            Result;
-        _ ->
-            case Result of
-                {ok, NewState} ->
-                    process_vdr_msges(Socket, T, NewState);
-                {warning, NewState} ->
-                    process_vdr_msges(Socket, T, NewState);
-                {error, ErrorType, NewState} ->
-                    {error, ErrorType, NewState};
-                _ ->
-					log:logvdr(error, State, "vdr_handler:process_vdr_msges(...) unknown state : ~p", [Result]),
-                    {error, unknown, State}
-            end
-    end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-% Parameter :
-% Return :
-%     {ok, State}
-%     {warning, State}
-%     {error, systemerror/vdrerror/invaliderror/exception, State}  
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-safe_process_vdr_msg(Socket, Msg, State) ->
-    try vdr_data_processor:process_vdr_data(Socket, Msg, State)
-    catch
-        _:Ex ->
-			[ST] = erlang:get_stacktrace(),
-            log:logvdr(error, State, "vdr_handler:safe_process_vdr_msg(...) Msg ~p~nexcption ~p~nStack trace ~p", [Msg, Ex, ST]),
-            {error, msg_process_exception, State}
-    end.

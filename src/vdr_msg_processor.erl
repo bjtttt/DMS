@@ -28,9 +28,9 @@
 
 -export([parse_msg_body/2]).
 
--export([create_final_msg/4,
+-export([create_gen_resp/3,
+         create_final_msg/4,
          create_final_msg/6,
-         create_gen_resp/3, 
          create_resend_subpack_req/3,
          create_reg_resp/3,
 	     create_set_term_args/2,
