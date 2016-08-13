@@ -39,8 +39,8 @@ safe_parse_data(State, Data) ->
     catch
         _:Why ->
             [ST] = erlang:get_stacktrace(),
-            log:logvdr(error, State, "parsing VDR data exception : ~p~ndata : ~p~nstack trace : ~p", [Why, Data, ST]),
-            {error, msg_process_exception, State}
+            log:logvdr(error, State, "vdr_data_processor:safe_parse_data(...) exception : ~p~ndata : ~p~nstack trace : ~p", [Why, Data, ST]),
+            {error, ?CONN_STAT_DISC_MSGEX, State}
     end.
 
 get_data_binary(Data) when is_list(Data)->

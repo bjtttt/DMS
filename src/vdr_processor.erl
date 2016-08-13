@@ -57,7 +57,7 @@ safe_process_vdr_msg(Socket, Msg, State) ->
 % Return :
 %     {ok, State}
 %     {warning, State}
-%     {error, systemerror/vdrerror/invaliderror/exception, State}  
+%     {error, ?, State}  
 %
 % MsgIdx  : VDR message index
 % FlowIdx : Gateway message flow index
@@ -65,7 +65,7 @@ safe_process_vdr_msg(Socket, Msg, State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 process_vdr_data(Socket, Data, State) -> 
     mslog:log_vdr_info(all, State, "data ~p", Data),
-    case vdr_data_parser:process_data(State, Data) of
+    case vdr_data_parser:safe_parse_data(State, Data) of
         {ok, HeadInfo, Msg, NewStateOrigin} ->
             {ID, MsgIdx, Tel, CryptoType} = HeadInfo,
             NewState = NewStateOrigin#vdritem{encrypt=convert_crytotype(CryptoType)},
