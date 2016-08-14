@@ -8,8 +8,7 @@
 
 -include("../include/header.hrl").
 
--export([safe_parse_data/2,
-         bxorbytelist/1]).
+-export([safe_parse_data/2]).
 
 %%%
 %%% check 0x7d
@@ -194,6 +193,8 @@ restore_7d_7e_msg(State, Data) ->
 %
 % Check whether received a complete msg packages
 % State#vdritem.msg : [[ID0,MsgIdx0,Total0,Index0,Data0],[ID1,MsgIdx1,Total1,Index1,Data1],[ID2,MsgIdx2,Total2,Index2,Data2],..
+% Rerturn :
+%   complete|notcomplete|ignore
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
@@ -215,123 +216,56 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
     		NewState = State#vdritem{msg=NewStoredMsges, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
-			case check_ignored_msg(State, MsgesWithID, MsgIdx, Total, Idx) of
-                replace ->
-                    
-				new ->
-					NewMsgWithID = [[ID, MsgIdx, Total, Idx, Body]],
-		            case check_msg(NewMsgWithID, Total) of
-		                ok ->
-		                    Msg = compose_msg(NewMsgWithID, Total),
-		                    [H|_T] = Msg,
-		                    [_ID, FirstMsgIdx, _Total, _Idx, _Body] = H,
-		                    case check_msg_idx(Msg, FirstMsgIdx) of
-		                        ok ->
-		                            NewState = State#vdritem{msg=MsgesWithoutID},
-		                            BinMsg = compose_real_msg(Msg),
-                                    NewMsgPackages = remove_msgidx_with_id(MsgPackages, ID),
-									common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 1 : ~p", 
-												   [State#vdritem.addr,
-													State#vdritem.id,
-													State#vdritem.serialno,
-													State#vdritem.auth,
-													State#vdritem.vehicleid,
-													State#vdritem.vehiclecode,
-													NewMsgPackages]),
-		                            {complete, BinMsg, NewState#vdritem{msgpackages={-1, NewMsgPackages}}};
-		                        error ->
-									MergedList = lists:merge(NewMsgWithID, MsgWithoutID),
-                                    NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs(NewMsgWithID)),
-									common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 2 : ~p", 
-												   [State#vdritem.addr,
-													State#vdritem.id,
-													State#vdritem.serialno,
-													State#vdritem.auth,
-													State#vdritem.vehicleid,
-													State#vdritem.vehiclecode,
-													NewMsgPackages]),
-		                            NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
-		                            {notcomplete, NewState}
-		                    end;
-		                error ->
-							MergedList = lists:merge(NewMsgWithID, MsgWithoutID),
-                            NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs(NewMsgWithID)),
-							common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 3 : ~p", 
-										   [State#vdritem.addr,
-											State#vdritem.id,
-											State#vdritem.serialno,
-											State#vdritem.auth,
-											State#vdritem.vehicleid,
-											State#vdritem.vehiclecode,
-											NewMsgPackages]),
-		                    NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
-		                    {notcomplete, NewState}
-		            end;
-				false ->
-					DelPack = del_pack_with_idx(MsgWithID, MsgIdx, Total, Idx),
-				    NewMsgWithID = lists:merge([[ID, MsgIdx, Total, Idx, Body]], DelPack),
-		            case check_msg(NewMsgWithID, Total) of
-		                ok ->
-		                    Msg = compose_msg(NewMsgWithID, Total),
-		                    [H|_T] = Msg,
-		                    [_ID, FirstMsgIdx, _Total, _Idx, _Body] = H,
-		                    case check_msg_idx(Msg, FirstMsgIdx) of
-		                        ok ->
-		                            NewState = State#vdritem{msg=MsgWithoutID},
-		                            BinMsg = compose_real_msg(Msg),
-                                    NewMsgPackages = remove_msgidx_with_id(MsgPackages, ID),
-									common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 4 : ~p", 
-												   [State#vdritem.addr,
-													State#vdritem.id,
-													State#vdritem.serialno,
-													State#vdritem.auth,
-													State#vdritem.vehicleid,
-													State#vdritem.vehiclecode,
-													NewMsgPackages]),
-		                            {complete, BinMsg, NewState#vdritem{msgpackages={-1, NewMsgPackages}}};
-		                        error ->
-									MergedList = lists:merge(NewMsgWithID, MsgWithoutID),
-                                    NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs(NewMsgWithID)),
-									common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 5 : ~p", 
-												   [State#vdritem.addr,
-													State#vdritem.id,
-													State#vdritem.serialno,
-													State#vdritem.auth,
-													State#vdritem.vehicleid,
-													State#vdritem.vehiclecode,
-													NewMsgPackages]),
-		                            NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
-		                            {notcomplete, NewState}
-		                    end;
-		                error ->
-							MergedList = lists:merge(NewMsgWithID, MsgWithoutID),
-                            NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs(NewMsgWithID)),
-							common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 6 : ~p", 
-										   [State#vdritem.addr,
-											State#vdritem.id,
-											State#vdritem.serialno,
-											State#vdritem.auth,
-											State#vdritem.vehicleid,
-											State#vdritem.vehiclecode,
-											NewMsgPackages]),
-		                    NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
-		                    {notcomplete, NewState}
-		            end;
-				_ ->
-					ok
-			end
+            NewMsgesWithID = get_new_msges_with_new_msg(NewMsg, MsgesWithID, MsgIdx),
+            case check_msg_completed(NewMsgesWithID, Total) of
+                ok ->
+                    Msg = lists:reverse(compose_msg(NewMsgesWithID, Total)),
+                    [H|_T] = Msg,
+                    [_ID, FirstMsgIdx, _Total, _Idx, _Body] = H,
+                    case check_msg_idx(Msg, FirstMsgIdx) of
+                        ok ->
+                            NewState = State#vdritem{msg=MsgesWithoutID},
+                            BinMsg = compose_real_msg(Msg),
+                            NewMsgPackages = remove_msgidx_with_id(MsgPackages, ID),
+                            mslog:log_vdr_info(info, State, "vdr_data_processor:combine_msg_packs(...) : combined message : ~p",[BinMsg]),
+                            {complete, BinMsg, NewState#vdritem{msgpackages={-1, NewMsgPackages}}};
+                        error ->
+                            NewState = State#vdritem{msg=MsgesWithoutID},
+                            NewMsgPackages = remove_msgidx_with_id(MsgPackages, ID),
+                            mslog:log_vdr_info(info, State, "vdr_data_processor:combine_msg_packs(...) new msg packages after index error check : ~p", [NewMsgPackages]),
+                            {ignore, NewState#vdritem{msgpackages={-1, NewMsgPackages}}}
+                    end;
+                error ->
+                    MergedList = lists:merge(NewMsgesWithID, MsgesWithoutID),
+                    NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs(NewMsgesWithID)),
+                    mslog:log_vdr_info(info, State, "vdr_data_processor:combine_msg_packs(...) new msg packages due to not complete : ~p", [NewMsgPackages]),
+                    NewState = State#vdritem{msg=MergedList, msgpackages={ID, NewMsgPackages}},
+                    {notcomplete, NewState}
+            end
     end.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   Remove the old message which has the same message index as that of the new message from the message list
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+get_new_msges_with_new_msg(NewMsg, MsgesWithID, MsgIdx) ->
+    case check_new_duplicated_msg(MsgesWithID, MsgIdx) of
+        true ->
+            lists:merge([NewMsg], del_pack_with_idx(MsgesWithID, MsgIdx));
+        false ->
+            lists:merge([NewMsg], MsgesWithID)
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % MsgPacks 	: [[ID0, FirstMsgIdx0, MsgIdxList0], [ID0, FirstMsgIdx0, MsgIdxList0], [ID0, FirstMsgIdx0, MsgIdxList0], ...]
 % ID		: 
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 remove_msgidx_with_id(MsgPacks, ID) when is_list(MsgPacks),
-									     length(MsgPacks),
-									     is_integer(ID),
-                                         ID > 0 ->
+									     length(MsgPacks) > 0 ->
     [H|T] = MsgPacks,
     [HID, _HFirstMsgIdx, _HMsgIdxs] = H,
     if
@@ -430,42 +364,25 @@ calc_missing_pack_msgidxs(_MissingIdxs, _LastMsgIdx, _LastIdx) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
-%   Check whether this message should be ignored or not.
+%   Check whether whether there is already a message which has the same message index.
 % Parameter :
 % Return :
-%       true    : the current message should be ignored
+%       true    :  there is already a message which has the same message index.
 %       false   :
-%       replace : the previous message should be replaced due to the same message index
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-check_ignored_msg(State, MsgesWithID, MsgIdx, Total, Idx) when is_list(MsgesWithID),
-                                                               length(MsgesWithID) > 0,
-                                                               is_integer(MsgIdx),
-                                                               is_integer(Total),
-                                                               is_integer(Idx),
-                                                               Total >= Idx ->
-	[H|_T] = MsgesWithID,
-	[_ID, HMsgIdx, HTotal, HIdx, _Body] = H,
+check_new_duplicated_msg(MsgesWithID, MsgIdx) when is_list(MsgesWithID),
+                                                   length(MsgesWithID) > 0 ->
+	[H|T] = MsgesWithID,
+	[_ID, HMsgIdx, _HTotal, _HIdx, _Body] = H,
 	if
-        HTotal =/= Total ->
+        HMsgIdx =:= MsgIdx ->
             true;
         true ->
-            if
-                HMsgIdx == MsgIdx ->
-                    replace;
-                true ->
-                    Diff0 = HMsgIdx - MsgIdx,
-                    Diff1 = HIdx - Idx,
-                    if
-                        Diff0 == Diff1 ->
-                            false;
-                        true ->
-                            true
-                    end
-            end
+            check_new_duplicated_msg(T, MsgIdx)
 	end;
-check_ignored_msg(_State, _MsgesWithID, _MsgIdx, _Total, _Idx) ->
-    true.
+check_new_duplicated_msg(_MsgesWithID, _MsgIdx) ->
+    false.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -517,43 +434,32 @@ get_msg_without_id(Msg, ID) when is_list(Msg),
 get_msg_without_id(_Msg, _ID) ->
     [].
 
-%%%
-%%% Remove msg package with the same Index from the msg packages
-%%% Before calling this method, please first call get_msg_with_id(Msg, ID) to get the msg packages with the ID.
-%%%
-del_pack_with_idx(Msg, MsgIdx, Total, Idx) ->
-    case Msg of
-        [] ->
-            [];
-        _ ->
-            [H|T] = Msg,
-            [_HID, HMsgIdx, HTotal, HIdx, _HBody] = H,
-            if
-                HMsgIdx + (HTotal - HIdx) < MsgIdx ->
-                    % This is the 2nd msg and discard all the 1st ones
-                    del_pack_with_idx(T, MsgIdx, Total, Idx);
-                HMsgIdx + (HTotal - HIdx) >= MsgIdx ->
-                    DiffTotal = HTotal - Total,
-                    if
-                        DiffTotal == 0 ->
-                            if
-                                Idx == HIdx ->
-                                    del_pack_with_idx(T, MsgIdx, Total, Idx);
-                                Idx =/= HIdx ->
-                                    lists:merge([H], del_pack_with_idx(T, MsgIdx, Total, Idx))
-                            end;
-                        DiffTotal =/= 0 ->
-                            % Take the new msg package as the standard
-                            del_pack_with_idx(T, MsgIdx, Total, Idx)
-                    end
-            end
-    end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   Remove msg package with the same message index
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+del_pack_with_idx(Msges, MsgIdx) when is_list(Msges),
+                                      length(Msges) > 0 ->
+    [H|T] = Msges,
+    [_HID, HMsgIdx, _HTotal, _HIdx, _HBody] = H,
+    if
+        HMsgIdx =:= MsgIdx ->
+            T;
+        true ->
+            lists:merge([H], del_pack_with_idx(T, MsgIdx))
+    end;
+del_pack_with_idx(_Msges, _MsgIdx) ->
+    [].
 
-%%%
-%%% Internal usage for combinemsgpacks(State, ID, FlowNum, Total, Idx, Body)
-%%% Check whether Packages includes all packages by checking the package index
-%%%
-check_msg(Packages, Total) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   Check whether Packages includes all packages by checking the package index
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+check_msg_completed(Packages, Total) ->
     Len = length(Packages),
     if
         Len == Total ->
@@ -564,13 +470,12 @@ check_msg(Packages, Total) ->
                     error
             end;
         Len =/= Total ->
-			common:loginfo("Check message error : Packages length ~p =/= Total ~p", [Len, Total]),
             error
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% Internal usage for checkmsg(Packages, Total)
+% Internal usage for check_msg(Packages, Total)
 % Remove the package index from the complete package index list
 % Return the missing package index list
 %
@@ -586,10 +491,12 @@ del_num_from_num_list(NumList, Packages) ->
             del_num_from_num_list(NewNumList, T)
     end.
 
-%%%
-%%% Internal usage for combinemsgpacks(State, ID, FlowNum, Total, Idx, Body)
-%%% The caller will check the length of Packages first
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Internal usage for combinemsgpacks(State, ID, FlowNum, Total, Idx, Body)
+% The caller will check the length of Packages first
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 compose_msg(Packages, Total) ->
     if
         Total < 1 ->
@@ -598,9 +505,11 @@ compose_msg(Packages, Total) ->
             lists:merge([get_package_by_idx(Packages, Total)], compose_msg(Packages, Total-1))
     end.
 
-%%%
-%%% Internal usag for composemsg(Packages, Total)
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Internal usag for composemsg(Packages, Total)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_package_by_idx(Packages, Idx) ->
     case Packages of
         [] ->
@@ -616,10 +525,11 @@ get_package_by_idx(Packages, Idx) ->
             end
     end.
 
-%%%
-%%% Internal usage for combine_msg_packs(State, ID, FlowNum, Total, Idx, Body)
-%%% Caller has make sure that Msg is not []
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Internal usage for combine_msg_packs(State, ID, FlowNum, Total, Idx, Body)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 check_msg_idx(Msg, MsgIdx) ->
     case Msg of
         [] ->
@@ -627,22 +537,23 @@ check_msg_idx(Msg, MsgIdx) ->
         _ ->
             [H|T] = Msg,
             [_ID, HMsgIdx, _Total, _HIdx, _Body] = H,
-            DiffMsgIdx = HMsgIdx - MsgIdx,
             if
-                DiffMsgIdx == 0 ->
+                HMsgIdx =:= MsgIdx ->
                     check_msg_idx(T, MsgIdx+1);
-                DiffMsgIdx =/= 0 ->
+                true ->
                     error
             end
     end.
 
-%%%
-%%%
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 compose_real_msg(Msges) when is_list(Msges),
 							 length(Msges) > 0 ->
     [H|T] = Msges,
-    [_ID,_MsgIdx,_Total,_HIdx,Body] = H,
+    [_ID, _MsgIdx, _Total, _HIdx, Body] = H,
     list_to_binary([Body, compose_real_msg(T)]);
 compose_real_msg(_Msges) ->
 	<<>>.
