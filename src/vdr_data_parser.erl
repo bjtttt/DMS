@@ -215,7 +215,9 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
     		NewState = State#vdritem{msg=NewStoredMsges, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
-			case check_ignored_msg(State, MsgesWithID, MsgIdx, Idx) of
+			case check_ignored_msg(State, MsgesWithID, MsgIdx, Total, Idx) of
+                replace ->
+                    
 				new ->
 					NewMsgWithID = [[ID, MsgIdx, Total, Idx, Body]],
 		            case check_msg(NewMsgWithID, Total) of
@@ -431,7 +433,7 @@ calc_missing_pack_msgidxs(_MissingIdxs, _LastMsgIdx, _LastIdx) ->
 %   Check whether this message should be ignored or not.
 % Parameter :
 % Return :
-%       true    :
+%       true    : the current message should be ignored
 %       false   :
 %       replace : the previous message should be replaced due to the same message index
 %
@@ -446,53 +448,24 @@ check_ignored_msg(State, MsgesWithID, MsgIdx, Total, Idx) when is_list(MsgesWith
 	[_ID, HMsgIdx, HTotal, HIdx, _Body] = H,
 	if
         HTotal =/= Total ->
-            false;
+            true;
         true ->
             if
-        		HMsgIdx > MsgIdx ->
+                HMsgIdx == MsgIdx ->
+                    replace;
+                true ->
                     Diff0 = HMsgIdx - MsgIdx,
+                    Diff1 = HIdx - Idx,
                     if
-                        Diff0 >= HTotal ->
-                            true;
+                        Diff0 == Diff1 ->
+                            false;
                         true ->
-        					if
-        						HIdx > Idx ->
-        							Diff1 = HIdx - Idx,
-        							if
-        								Diff0 =/= Diff1 ->
-        									true;
-        								true ->
-        									false
-        							end;
-        						true ->
-        							true
-                            end
-        			end;
-        		HMsgIdx == MsgIdx ->
-        			replace;
-        		HMsgIdx < MsgIdx ->
-                    Diff0 = MsgIdx - HMsgIdx,
-                    if
-                        Diff0 >= HTotal ->
-                            new;
-                        true ->
-        					if
-        						HIdx < Idx ->
-        							Diff1 = Idx - HIdx,
-        							if
-        								Diff0 =/= Diff1 ->
-        									new;
-        								true ->
-        									false
-        							end;
-        						true ->
-        							true
-        					end
+                            true
                     end
             end
 	end;
 check_ignored_msg(_State, _MsgesWithID, _MsgIdx, _Total, _Idx) ->
-    false.
+    true.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
