@@ -197,6 +197,7 @@ restore_7d_7e_msg(State, Data) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
+    NewMsg = [ID, MsgIdx, Total, Idx, Body],
     StoredMsges = State#vdritem.msg,
     % Get all msg packages with the same ID
     % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID == ID ]
@@ -204,16 +205,17 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
     % Get all msg packages without the same ID
     % [E || E <- State#vdritem.msg, [HID,_HFlowNum,_HTotal,_HIdx,_HBody] = E, HID =/= ID ]
     MsgesWithoutID = get_msg_without_id(StoredMsges, ID),
+    % What is LastID for?
     {_LastID, MsgPackages} = State#vdritem.msgpackages,
-    case MsgWithID of
+    case MsgesWithID of
         [] ->
-			NewStoredMsges = lists:merge([[ID,MsgIdx,Total,Idx,Body]], StoredMsges),
-            NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs([[ID,MsgIdx,Total,Idx,Body]])),
-			log:logvdr(info, State, "new MSG packages 0 : ~p", NewMsgPackages]),
+			NewStoredMsges = lists:merge(StoredMsges, [NewMsg]),
+            NewMsgPackages = update_msg_packs(MsgPackages, ID, get_missing_pack_msgidxs([NewMsg])),
+			mslog:log_vdr_info(info, State, "new MSG packages : ~p", [NewMsgPackages]),
     		NewState = State#vdritem{msg=NewStoredMsges, msgpackages={ID, NewMsgPackages}},
 			{notcomplete, NewState};
     	_ ->
-			case check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) of
+			case check_ignored_msg(State, MsgesWithID, MsgIdx, Idx) of
 				new ->
 					NewMsgWithID = [[ID, MsgIdx, Total, Idx, Body]],
 		            case check_msg(NewMsgWithID, Total) of
@@ -223,7 +225,7 @@ combine_msg_packs(State, ID, MsgIdx, Total, Idx, Body) ->
 		                    [_ID, FirstMsgIdx, _Total, _Idx, _Body] = H,
 		                    case check_msg_idx(Msg, FirstMsgIdx) of
 		                        ok ->
-		                            NewState = State#vdritem{msg=MsgWithoutID},
+		                            NewState = State#vdritem{msg=MsgesWithoutID},
 		                            BinMsg = compose_real_msg(Msg),
                                     NewMsgPackages = remove_msgidx_with_id(MsgPackages, ID),
 									common:loginfo("VDR (~p) (id:~p, serialno:~p, authen_code:~p, vehicleid:~p, vehiclecode:~p)~nNew msg packages 1 : ~p", 
@@ -367,7 +369,7 @@ update_msg_packs(MsgPacks, ID, MsgIdxs) when is_list(MsgPacks),
 		HID == ID ->
             case MsgIdxs of
                 [] ->
-                    T;
+                    MsgPacks;
                 _ ->
                     lists:merge([[ID, HFirstMsgIdx, MsgIdxs]], T)
             end;
@@ -389,24 +391,26 @@ update_msg_packs(MsgPacks, _ID, _MsgIdxs) ->
 %           it means it is the 1st message package
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-get_missing_pack_msgidxs(MsgWithID) when is_list(MsgWithID),
-                                         length(MsgWithID) > 0 ->
-    Last = lists:last(MsgWithID),
+get_missing_pack_msgidxs(MsgesWithID) when is_list(MsgesWithID),
+                                           length(MsgesWithID) > 0 ->
+    Last = lists:last(MsgesWithID),
     [_ID, LMsgIdx, LTotal, LIdx, _Body] = Last,
     FirstMsgIdx = LMsgIdx - (LTotal - LIdx),
     if
         LIdx == 1 ->
             none;
         true ->
-            MissingIdxs = del_num_from_num_list([E || E <- lists:seq(1, LIdx)], MsgWithID),
+            MissingIdxs = del_num_from_num_list([E || E <- lists:seq(1, LIdx)], MsgesWithID),
             {FirstMsgIdx, calc_missing_pack_msgidxs(MissingIdxs, LMsgIdx, LIdx)}
     end;
-get_missing_pack_msgidxs(_MsgWithID) ->
+get_missing_pack_msgidxs(_MsgesWithID) ->
     none.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%
+% Description :
+%   Convert message package index to message index. For example, the 1st message index is 2123, and the indexes are [1,3,4,5].
+%   The final list will be [2123,2125,2126,2127]
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 calc_missing_pack_msgidxs(MissingIdxs, LastMsgIdx, LastIdx) when is_list(MissingIdxs),
@@ -423,66 +427,57 @@ calc_missing_pack_msgidxs(_MissingIdxs, _LastMsgIdx, _LastIdx) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%
+% Description :
+%   Check whether this message should be ignored or not.
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
-                                                             length(MsgWithID) > 0,
-                                                             is_integer(MsgIdx),
-                                                             is_integer(Total),
-                                                             is_integer(Idx),
-                                                             Total >= Idx ->
-	[H|_T] = MsgWithID,
-	[_ID, HMsgIdx, HTotal, HIdx, _Body] = H,
-	vdr_handler:logvdr(info, State, 
-                       "header MSG : MsgIdx ~p, Total ~p, Index ~p~nReceived msg : MsgIdx ~p, Total ~p, Index ~p",
-                       [HMsgIdx, HTotal, HIdx, MsgIdx, Total, Idx]),
+check_ignored_msg(State, MsgesWithID, MsgIdx, Idx) when is_list(MsgesWithID),
+                                                        length(MsgesWithID) > 0,
+                                                        is_integer(MsgIdx),
+                                                        is_integer(Idx) ->
+	[H|_T] = MsgesWithID,
+	[_ID, HMsgIdx, _HTotal, HIdx, _Body] = H,
 	if
-		HTotal =/= Total ->
-			true;
-		true ->
-			if
-				HMsgIdx > MsgIdx ->
-                    Diff0 = HMsgIdx - MsgIdx,
-                    if
-                        Diff0 >= HTotal ->
-                            true;
-                        true ->
-        					if
-        						HIdx > Idx ->
-        							Diff1 = HIdx - Idx,
-        							if
-        								Diff0 =/= Diff1 ->
-        									true;
-        								true ->
-        									false
-        							end;
-        						true ->
-        							true
-                            end
-					end;
-				HMsgIdx == MsgIdx ->
-					true;
-				HMsgIdx < MsgIdx ->
-                    Diff0 = MsgIdx - HMsgIdx,
-                    if
-                        Diff0 >= HTotal ->
-                            new;
-                        true ->
-        					if
-        						HIdx < Idx ->
-        							Diff1 = Idx - HIdx,
-        							if
-        								Diff0 =/= Diff1 ->
-        									new;
-        								true ->
-        									false
-        							end;
-        						true ->
-        							true
-        					end
+		HMsgIdx > MsgIdx ->
+            Diff0 = HMsgIdx - MsgIdx,
+            if
+                Diff0 >= HTotal ->
+                    true;
+                true ->
+					if
+						HIdx > Idx ->
+							Diff1 = HIdx - Idx,
+							if
+								Diff0 =/= Diff1 ->
+									true;
+								true ->
+									false
+							end;
+						true ->
+							true
                     end
-			end
+			end;
+		HMsgIdx == MsgIdx ->
+			true;
+		HMsgIdx < MsgIdx ->
+            Diff0 = MsgIdx - HMsgIdx,
+            if
+                Diff0 >= HTotal ->
+                    new;
+                true ->
+					if
+						HIdx < Idx ->
+							Diff1 = Idx - HIdx,
+							if
+								Diff0 =/= Diff1 ->
+									new;
+								true ->
+									false
+							end;
+						true ->
+							true
+					end
+            end
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -494,7 +489,7 @@ check_ignored_msg(State, MsgWithID, MsgIdx, Total, Idx) when is_list(MsgWithID),
 get_msg_with_id(Msg, ID) when is_list(Msg),
                               length(Msg) > 0 ->
     [H|T] = Msg,
-    [HID,_HMsgIdx,_HTotal,_HIdx,_HBody] = H,
+    [HID, _HMsgIdx, _HTotal ,_HIdx, _HBody] = H,
     TWithID = get_msg_with_id(T, ID),
     if
         HID == ID ->
@@ -502,12 +497,13 @@ get_msg_with_id(Msg, ID) when is_list(Msg),
                 TWithID == [] ->
                     [H];
                 true ->
-                    lists:merge([H], TWithID);
+                    lists:merge([H], TWithID)
+            end;
         HID =/= ID ->
             TWithID
     end;
 get_msg_with_id(_Msg, _ID) ->
-    []
+    [].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -518,7 +514,7 @@ get_msg_with_id(_Msg, _ID) ->
 get_msg_without_id(Msg, ID) when is_list(Msg),
                                  length(Msg) > 0 ->
     [H|T] = Msg,
-    [HID,_HMsgIdx,_HTotal,_HIdx,_HBody] = H,
+    [HID, _HMsgIdx, _HTotal, _HIdx, _HBody] = H,
     TWithoutID = get_msg_without_id(T, ID),
     if
         HID == ID ->
@@ -528,7 +524,7 @@ get_msg_without_id(Msg, ID) when is_list(Msg),
                 TWithoutID == [] ->
                     [H];
                 true ->
-                    lists:merge([H], get_msg_without_id(T, ID))
+                    lists:merge([H], TWithoutID)
             end
     end;
 get_msg_without_id(_Msg, _ID) ->
@@ -585,13 +581,14 @@ check_msg(Packages, Total) ->
             error
     end.
 
-%%%
-%%% Internal usage for checkmsg(Packages, Total)
-%%% Remove the package index from the complete package index list
-%%% Return the missing package index list
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Internal usage for checkmsg(Packages, Total)
+% Remove the package index from the complete package index list
+% Return the missing package index list
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 del_num_from_num_list(NumList, Packages) ->
-	common:loginfo("Delete number from number list : current number list ~p", [NumList]),
     case Packages of
         [] ->
             NumList;
@@ -599,7 +596,6 @@ del_num_from_num_list(NumList, Packages) ->
             [H|T] = Packages,
             [_ID, _MsgIdx, _Total, Idx, _Body] = H,
             NewNumList = [E || E <- NumList, E =/= Idx],
-			common:loginfo("Delete number from number list : new number list ~p without ~p", [NewNumList, Idx]),
             del_num_from_num_list(NewNumList, T)
     end.
 
