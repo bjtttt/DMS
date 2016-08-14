@@ -429,56 +429,70 @@ calc_missing_pack_msgidxs(_MissingIdxs, _LastMsgIdx, _LastIdx) ->
 %
 % Description :
 %   Check whether this message should be ignored or not.
+% Parameter :
+% Return :
+%       true    :
+%       false   :
+%       replace : the previous message should be replaced due to the same message index
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-check_ignored_msg(State, MsgesWithID, MsgIdx, Idx) when is_list(MsgesWithID),
-                                                        length(MsgesWithID) > 0,
-                                                        is_integer(MsgIdx),
-                                                        is_integer(Idx) ->
+check_ignored_msg(State, MsgesWithID, MsgIdx, Total, Idx) when is_list(MsgesWithID),
+                                                               length(MsgesWithID) > 0,
+                                                               is_integer(MsgIdx),
+                                                               is_integer(Total),
+                                                               is_integer(Idx),
+                                                               Total >= Idx ->
 	[H|_T] = MsgesWithID,
-	[_ID, HMsgIdx, _HTotal, HIdx, _Body] = H,
+	[_ID, HMsgIdx, HTotal, HIdx, _Body] = H,
 	if
-		HMsgIdx > MsgIdx ->
-            Diff0 = HMsgIdx - MsgIdx,
+        HTotal =/= Total ->
+            false;
+        true ->
             if
-                Diff0 >= HTotal ->
-                    true;
-                true ->
-					if
-						HIdx > Idx ->
-							Diff1 = HIdx - Idx,
-							if
-								Diff0 =/= Diff1 ->
-									true;
-								true ->
-									false
-							end;
-						true ->
-							true
+        		HMsgIdx > MsgIdx ->
+                    Diff0 = HMsgIdx - MsgIdx,
+                    if
+                        Diff0 >= HTotal ->
+                            true;
+                        true ->
+        					if
+        						HIdx > Idx ->
+        							Diff1 = HIdx - Idx,
+        							if
+        								Diff0 =/= Diff1 ->
+        									true;
+        								true ->
+        									false
+        							end;
+        						true ->
+        							true
+                            end
+        			end;
+        		HMsgIdx == MsgIdx ->
+        			replace;
+        		HMsgIdx < MsgIdx ->
+                    Diff0 = MsgIdx - HMsgIdx,
+                    if
+                        Diff0 >= HTotal ->
+                            new;
+                        true ->
+        					if
+        						HIdx < Idx ->
+        							Diff1 = Idx - HIdx,
+        							if
+        								Diff0 =/= Diff1 ->
+        									new;
+        								true ->
+        									false
+        							end;
+        						true ->
+        							true
+        					end
                     end
-			end;
-		HMsgIdx == MsgIdx ->
-			true;
-		HMsgIdx < MsgIdx ->
-            Diff0 = MsgIdx - HMsgIdx,
-            if
-                Diff0 >= HTotal ->
-                    new;
-                true ->
-					if
-						HIdx < Idx ->
-							Diff1 = Idx - HIdx,
-							if
-								Diff0 =/= Diff1 ->
-									new;
-								true ->
-									false
-							end;
-						true ->
-							true
-					end
             end
-	end.
+	end;
+check_ignored_msg(_State, _MsgesWithID, _MsgIdx, _Total, _Idx) ->
+    false.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
