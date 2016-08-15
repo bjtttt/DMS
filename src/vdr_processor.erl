@@ -85,45 +85,38 @@ process_vdr_data(Socket, Data, State) ->
             {RequiredId, MsgPackages} = NewState#vdritem.msgpackages,
             if
                 RequiredId > -1 ->
-                    common:loginfo("~p starts sending VDR (~p) request for resend : required msg id ~p", 
-                                   [NewState#vdritem.pid, 
-                                    NewState#vdritem.addr, 
-                                    RequiredId]),
                     MissingMsgIdx = find_missing_msgidx(RequiredId, MsgPackages),
-                    common:loginfo("~p starts sending VDR (~p) request for resend : finding missing msg index ~p", 
-                                   [NewState#vdritem.pid, 
-                                    NewState#vdritem.addr, 
-                                    MissingMsgIdx]),
+                    mslog:log_vdr_info(info, State, "vdr_processor:process_vdr_data(...) required msg id ~p, missing msg indexes ~p",  [RequiredId, MissingMsgIdx]),
                     case MissingMsgIdx of
                         none ->
-                            [VDRItem] = ets:lookup(vdrtable, Socket),
-                            VDRTablePid = VDRItem#vdritem.vdrtablepid,
-                            NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
-                            common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
+                            mslog:log_vdr_info(error, State, "vdr_processor:process_vdr_data(...) required msg id ~p, missing msg indexes ~p but ignored",  [RequiredId, MissingMsgIdx]),                            
                             
+                            % Why?
+                            %[VDRItem] = ets:lookup(vdrtable, Socket),
+                            %VDRTablePid = VDRItem#vdritem.vdrtablepid,
+                            %NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
+                            %common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
+
                             {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
                         {FirstmsgIdxID, MsgIdxsID} ->
-                            MsgBody1 = vdr_data_processor:create_resend_subpack_req(FirstmsgIdxID, length(MsgIdxsID), MsgIdxsID),
-                            common:loginfo("~p sends VDR (~p) request for resend : fisrt msg id ~p, msg indexes ~p~n~p", 
-                                           [NewState#vdritem.pid, 
-                                            NewState#vdritem.addr, 
-                                            FirstmsgIdxID, 
-                                            MsgIdxsID, 
-                                            MsgBody1]),
+                            MsgBody1 = vdr_msg_processor:create_resend_subpack_req(FirstmsgIdxID, length(MsgIdxsID), MsgIdxsID),
+                            mslog:log_vdr_info(info, State, "resend msges : fisrt msg id ~p, msg indexes ~p, data ~p", [FirstmsgIdxID,MsgIdxsID,MsgBody1]),
                             NewFlowIdx1 = send_data_to_vdr(16#8003, NewState#vdritem.tel, FlowIdx, MsgBody1, NewState),
 
-                            [VDRItem] = ets:lookup(vdrtable, Socket),
-                            VDRTablePid = VDRItem#vdritem.vdrtablepid,
-                            NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
-                            common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
+                            % Why?
+                            %[VDRItem] = ets:lookup(vdrtable, Socket),
+                            %?VDRTablePid = VDRItem#vdritem.vdrtablepid,
+                            %NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
+                            %common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
                             
                             {ok, NewState#vdritem{msgflownum=NewFlowIdx1}}
                     end;
                 true ->
-                    [VDRItem] = ets:lookup(vdrtable, Socket),
-                    VDRTablePid = VDRItem#vdritem.vdrtablepid,
-                    NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
-                    common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
+                    % Why?
+                    %[VDRItem] = ets:lookup(vdrtable, Socket),
+                    %VDRTablePid = VDRItem#vdritem.vdrtablepid,
+                    %NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
+                    %common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
                     
                     {ok, NewState#vdritem{msgflownum=NewFlowIdx}}
             end
@@ -409,147 +402,6 @@ get_appinfo_area_line_alarm(AppInfo) when is_list(AppInfo),
 get_appinfo_area_line_alarm(_AppInfo) ->
     [0,0,0].
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% SetClear : 1 or 0
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-send_masg_to_ws_alarm(FlowIdx, AlarmList, SetClear, Lat, Lon, TimeBinS, State) when is_list(AlarmList),
-                                                                                    length(AlarmList) > 0,
-                                                                                    is_binary(TimeBinS) ->
-    [H|T] = AlarmList,
-    LenT = length(T),
-    {alarmitem, _VehicleID, ID, _Time} = H,
-    case SetClear of
-        1 ->
-            {ok, WSUpdate} = wsock_data_parser:create_term_alarm([State#vdritem.vehicleid],
-                                                                 FlowIdx,
-                                                                 common:combine_strings(["\"", State#vdritem.vehiclecode, "\""], false),
-                                                                 ID,
-                                                                 1,
-                                                                 Lat, 
-                                                                 Lon,
-                                                                 binary_to_list(TimeBinS)),
-            send_msg_to_ws_nowait(WSUpdate, State), %wsock_client:send(WSUpdate)
-            if
-                LenT > 0 ->
-                    send_masg_to_ws_alarm(FlowIdx, T, SetClear, Lat, Lon, TimeBinS, State);
-                true ->
-                    ok
-            end;
-        0 ->
-            {ok, WSUpdate} = wsock_data_parser:create_term_alarm([State#vdritem.vehicleid],
-                                                                 FlowIdx,
-                                                                 common:combine_strings(["\"", State#vdritem.vehiclecode, "\""], false),
-                                                                 ID,
-                                                                 0,
-                                                                 Lat, 
-                                                                 Lon,
-                                                                 binary_to_list(TimeBinS)),
-            send_msg_to_ws_nowait(WSUpdate, State), %wsock_client:send(WSUpdate)
-            if
-                LenT > 0 ->
-                    send_masg_to_ws_alarm(FlowIdx, T, SetClear, Lat, Lon, TimeBinS, State);
-                true ->
-                    ok
-            end;
-        _ ->
-            ok
-    end;
-send_masg_to_ws_alarm(_FlowIdx, _AlarmList, _SetClear, _Lat, _Lon, _TimeBinS, _State) ->
-    ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-find_alarm_in_lista_not_in_listb(ListA, ListB) when is_list(ListA),
-                                                    is_list(ListB)->
-    LenA = length(ListA),
-    LenB = length(ListB),
-    if
-        LenA < 1 ->
-            [];
-        true ->
-            if
-                LenB < 1 ->
-                    ListA;
-                true ->
-                    [H|T] = ListA,
-                    case find_a_in_lista(ListB, H) of
-                        true ->
-                            find_alarm_in_lista_not_in_listb(T, ListB);
-                        false ->
-                            lists:merge([[H], find_alarm_in_lista_not_in_listb(T, ListB)])
-                    end
-            end
-    end;
-find_alarm_in_lista_not_in_listb(_ListA, _ListB) ->
-    [].
-                    
-find_a_in_lista(ListA, A) when is_list(ListA),
-                               length(ListA) > 0 ->
-    [H|T] = ListA,
-    {alarmitem, _VehicleID, ID, _Time} = H,
-    {alarmitem, _VehicleIDA, IDA, _TimeA} = A,
-    if
-        ID == IDA ->
-            true;
-        true ->
-            LenT = length(T),
-            if
-                LenT < 1 ->
-                    false;
-                true ->
-                    find_a_in_lista(T, A)
-            end
-    end;
-find_a_in_lista(_ListA, _A) ->
-    false.
-
-get_alarm_item(Index, AlarmList) when is_integer(Index),
-                                      is_list(AlarmList),
-                                      length(AlarmList) > 0,
-                                      Index >= 0,
-                                      Index =< 31 ->
-    [H|T] = AlarmList,
-    {alarmitem, _VehicleID, Idx, _Time} = H,
-    if
-        Index == Idx ->
-            H;
-        true ->
-            get_alarm_item(Index, T)
-    end;
-get_alarm_item(_Index, _AlarmList) ->
-    empty.
-
-remove_alarm_item(Index, AlarmList) when is_integer(Index),
-                                         is_list(AlarmList),
-                                         length(AlarmList) > 0,
-                                         Index >= 0,
-                                         Index =< 31 ->
-    [H|T] = AlarmList,
-    {alarmitem, _VehicleID, Idx, _Time} = H,
-    if
-        Index == Idx ->
-            case T of
-                [] ->
-                    [];
-                _ ->
-                    remove_alarm_item(Index, T)
-            end;
-        true ->
-            case T of
-                [] ->
-                    [H];
-                _ ->
-                    lists:merge([H], remove_alarm_item(Index, T))
-            end
-    end;
-remove_alarm_item(_Index, AlarmList) ->
-    AlarmList.
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Diconnect socket and remove related entries from vdrtable
@@ -601,172 +453,6 @@ check_alarm(State, VehicleID) ->
             end
     after ?DB_RESP_TIMEOUT * 3 ->
             empty
-    end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-update_reg_install_time(DeviceID, DeviceRegTime, VehicleID, VehicleDeviceInstallTime, State) ->
-    {Year, Month, Day} = erlang:date(),
-    {Hour, Minute, Second} = erlang:time(),
-    DateTime = integer_to_list(Year) ++ "-" ++ 
-                   integer_to_list(Month) ++ "-" ++ 
-                   integer_to_list(Day) ++ " " ++ 
-                   integer_to_list(Hour) ++ ":" ++ 
-                   integer_to_list(Minute) ++ ":" ++ 
-                   integer_to_list(Second),
-    if
-        DeviceRegTime == undefined ->
-            DevInstallTimeSql = list_to_binary([<<"update vehicle set dev_install_time='">>,
-                                                list_to_binary(DateTime),
-                                                <<"' where id=">>,
-                                                common:integer_to_binary(VehicleID)]),
-            % Should we check the update result?
-            %end_sql_to_db(regauth, DevInstallTimeSql, State);
-            send_sql_to_db_nowait(conn, DevInstallTimeSql, State);
-        true ->
-            ok
-    end,
-    if
-        VehicleDeviceInstallTime == undefined ->
-            VDRRegTimeSql = list_to_binary([<<"update device set reg_time='">>,
-                                            list_to_binary(DateTime),
-                                            <<"' where id=">>,
-                                            common:integer_to_binary(DeviceID)]),
-            % Should we check the update result?
-            %send_sql_to_db(regauth, VDRRegTimeSql, State);
-            send_sql_to_db_nowait(conn, VDRRegTimeSql, State);
-        true ->
-            ok
-    end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Parameters :
-%       VehicleID   : Integer
-%       DriverID    : Integer
-%       TimeS       : String
-%       Alarm       : Integer
-%       Index       : Integer 0 - 31
-%       AlarmList   : List
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-update_vehicle_alarm(VehicleID, DriverID, TimeS, TimeTuple, Alarm, Index, MsgIdx, State, AreaLineAlarm) when is_integer(VehicleID),
-                                                                                              is_integer(DriverID),
-                                                                                              is_integer(Index),
-                                                                                              is_list(TimeS),
-                                                                                              is_integer(MsgIdx),
-                                                                                              MsgIdx >= 0,
-                                                                                              is_integer(Alarm),
-                                                                                              Index >= 0,
-                                                                                              Index =< 31 ->
-    AlarmList = State#vdritem.alarmlist,
-    Flag = 1 bsl Index,
-    BitState = Alarm band Flag,
-    [_ID, AreaLineType, AreaLineID, AreaLineOper] = AreaLineAlarm,
-    if
-        BitState == 1 ->
-            AlarmEntry = get_alarm_item(Index, AlarmList),
-            if
-                AlarmEntry == empty ->
-                    UpdateSql = list_to_binary([<<"insert into vehicle_alarm(vehicle_id,driver_id,alarm_time,clear_time,type_id,sn,inout_area_line_id,inout_area_line_type,inout_area_line_oper) values(">>,
-                                                common:integer_to_binary(VehicleID), <<",">>,
-                                                common:integer_to_binary(DriverID), <<",'">>,
-                                                list_to_binary(TimeS), <<"',NULL,">>,
-                                                common:integer_to_binary(Index), <<",">>,
-                                                common:integer_to_binary(MsgIdx), <<",">>, 
-                                                common:integer_to_binary(AreaLineID), <<",">>,
-                                                common:integer_to_binary(AreaLineType), <<",">>,
-                                                common:integer_to_binary(AreaLineOper), <<")">>]),
-                    send_sql_to_db_nowait(conn, UpdateSql, State),
-                    NewAlarmList = lists:merge(AlarmList,[{alarmitem, VehicleID, Index, TimeS}]),%TimeTuple}]),
-                    update_vehicle_alarm(VehicleID, DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State#vdritem{alarmlist=NewAlarmList}, AreaLineAlarm);
-                true ->
-                    update_vehicle_alarm(VehicleID, DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State, AreaLineAlarm)
-            end;
-        true ->
-            AlarmEntry = get_alarm_item(Index, AlarmList),
-            if
-                AlarmEntry == empty ->
-                    update_vehicle_alarm(VehicleID, DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State, AreaLineAlarm);
-                true ->
-                    {alarmitem, _VehicleID, Index, SetTime} = AlarmEntry,
-                        UpdateSql = list_to_binary([<<"update vehicle_alarm set clear_time='">>, list_to_binary(TimeS),
-                                                    <<"' where vehicle_id=">>, common:integer_to_binary(VehicleID),
-                                                    <<" and driver_id=">>, common:integer_to_binary(DriverID),
-                                                    <<" and alarm_time='">>, list_to_binary(SetTime),
-                                                    <<"' and type_id=">>, common:integer_to_binary(Index)]),
-                        send_sql_to_db_nowait(conn, UpdateSql, State),
-                        NewAlarmList = remove_alarm_item(Index, AlarmList),
-                        update_vehicle_alarm(VehicleID, DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State#vdritem{alarmlist=NewAlarmList}, AreaLineAlarm)
-            end
-    end;
-update_vehicle_alarm(VehicleID, _DriverID, TimeS, TimeTuple, Alarm, Index, MsgIdx, State, AreaLineAlarm) when is_integer(VehicleID),
-                                                                                               is_integer(Alarm),
-                                                                                               is_list(TimeS),
-                                                                                               is_integer(MsgIdx),                                                                                         
-                                                                                               MsgIdx >= 0,
-                                                                                               is_integer(Alarm),
-                                                                                               Index >= 0,
-                                                                                               Index =< 31 ->
-    AlarmList = State#vdritem.alarmlist,
-    Flag = 1 bsl Index,
-    BitState = Alarm band Flag,
-    [AreaLineType, AreaLineID, AreaLineOper] = AreaLineAlarm,
-    if
-        BitState == Flag ->
-            AlarmEntry = get_alarm_item(Index, AlarmList),
-            if
-                AlarmEntry == empty ->
-                    UpdateSql = list_to_binary([<<"insert into vehicle_alarm(vehicle_id,driver_id,alarm_time,clear_time,type_id,sn,inout_area_line_id,inout_area_line_type,inout_area_line_oper) values(">>,
-                                                common:integer_to_binary(VehicleID), <<",0,'">>,
-                                                list_to_binary(TimeS), <<"',NULL,">>,
-                                                common:integer_to_binary(Index), <<",">>,
-                                                common:integer_to_binary(MsgIdx), <<",">>, 
-                                                common:integer_to_binary(AreaLineID), <<",">>,
-                                                common:integer_to_binary(AreaLineType), <<",">>,
-                                                common:integer_to_binary(AreaLineOper), <<")">>]),
-                    send_sql_to_db_nowait(conn, UpdateSql, State),
-                    NewAlarmList = lists:merge(AlarmList,[{alarmitem, VehicleID, Index, TimeS}]),%TimeTuple}]),
-                    update_vehicle_alarm(VehicleID, _DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State#vdritem{alarmlist=NewAlarmList}, AreaLineAlarm);
-                true ->
-                    update_vehicle_alarm(VehicleID, _DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State, AreaLineAlarm)
-            end;
-        true ->
-            AlarmEntry = get_alarm_item(Index, AlarmList),
-            if
-                AlarmEntry == empty ->
-                    update_vehicle_alarm(VehicleID, _DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State, AreaLineAlarm);
-                true ->
-                    {alarmitem, _VehicleID, Index, SetTime} = AlarmEntry,
-                    UpdateSql = list_to_binary([<<"update vehicle_alarm set clear_time='">>, list_to_binary(TimeS),
-                                                <<"' where vehicle_id=">>, common:integer_to_binary(VehicleID),
-                                                <<" and driver_id=0 and alarm_time='">>, list_to_binary(SetTime),
-                                                <<"' and type_id=">>, common:integer_to_binary(Index)]),
-                    send_sql_to_db_nowait(conn, UpdateSql, State),
-                    NewAlarmList = remove_alarm_item(Index, AlarmList),
-                    update_vehicle_alarm(VehicleID, _DriverID, TimeS, TimeTuple, Alarm, Index+1, MsgIdx, State#vdritem{alarmlist=NewAlarmList}, AreaLineAlarm)
-            end
-    end;
-update_vehicle_alarm(_VehicleID, _DriverID, _TimeS, _TimeTuple, _Alarm, _Index, _MsgIdx, State, _AreaLineAlarm) ->
-    State#vdritem.alarmlist.
-
-send_sqls_to_db_nowait(PoolId, Msgs, State) when is_list(Msgs),
-                                                 length(Msgs) > 0 ->
-    [H|T] = Msgs,
-    send_sql_to_db_nowait(PoolId, H, State),
-    send_sqls_to_db_nowait(PoolId, T, State);
-send_sqls_to_db_nowait(_PoolId, _Msgs, _State) ->
-    ok.
-
-get_certcode_for_sql(CertCode) ->
-    if
-        CertCode == undefined ->
-            <<"">>;
-        true ->
-            CertCode
     end.
  
 get_driver_cert_code(State) ->
@@ -883,12 +569,12 @@ send_data_to_vdr(ID, Tel, FlowIdx, MsgBody, State) ->
                         MsgBodyTypeBytes = binary:part(MsgBody, MsgLen-3, 2),
                         if
                             MsgBodyTypeBytes =/= <<2,0>> andalso MsgBodyTypeBytes =/= <<0,2>> andalso MsgBodyTypeBytes =/= <<1,2>> ->
-                                common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, MsgType ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBodyTypeBytes, MsgBody]);
+                                mslog:log_vdr_info(all, State, "vdr_processor:send_data_to_vdr(...) ID ~p, FlowIdx ~p, MsgType ~p, Msgbody ~p", [ID, FlowIdx, MsgBodyTypeBytes, MsgBody]);
                             true ->
                                 ok
                         end;
                     true ->
-                        common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBody])
+                        mslog:log_vdr_info(all, State, "vdr_processor:send_data_to_vdr(...) ID ~p, FlowIdx ~p, Msgbody ~p", [ID, FlowIdx, MsgBody])
                 end
             catch
                 _:_ ->
@@ -911,9 +597,7 @@ send_data_to_vdr(ID, Tel, FlowIdx, MsgBody, State) ->
                             do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State)
                     end;
                 true ->
-                    %common:loginfo("2"),
                     Msg = vdr_data_processor:create_final_msg(ID, Tel, FlowIdx, MsgBody),
-                    %common:loginfo("4"),
                     do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State)
             end;
         _ ->
@@ -925,12 +609,12 @@ send_data_to_vdr(ID, Tel, FlowIdx, MsgBody, State) ->
                     ID == 16#8001 ->
                         if
                             MsgBodyTypeBytes =/= <<2,0>> andalso MsgBodyTypeBytes =/= <<0,2>> andalso MsgBodyTypeBytes =/= <<1,2>> ->
-                                common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, MsgType ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBodyTypeBytes, MsgBody]);
+                                mslog:log_vdr_info(all, State, "vdr_processor:send_data_to_vdr(...) ID ~p, FlowIdx ~p, MsgType ~p, Msgbody ~p", [ID, FlowIdx, MsgBodyTypeBytes, MsgBody]);
                             true ->
                                 ok
                         end;
                     true ->
-                        common:loginfo("Msg2VDR : ID ~p, Tel ~p, FlowIdx ~p, Msgbody ~p", [ID, Tel, FlowIdx, MsgBody])
+                        mslog:log_vdr_info(all, State, "vdr_processor:send_data_to_vdr(...) ID ~p, FlowIdx ~p, Msgbody ~p", [ID, FlowIdx, MsgBody])
                 end
             catch
                 _:_ ->
@@ -949,7 +633,7 @@ do_send_data_to_vdr(Pid, Socket, Msg, ID, FlowIdx, LinkPid, State) ->
                 true ->
                     if
                         Msg == <<>> andalso ID =/= 16#8702 ->
-                            common:loginfo("~p send_data_to_vdr NULL final message : ID (~p), FlowIdx (~p), Msg (~p)", [Pid, ID, FlowIdx, Msg]);
+                            mslog:log_vdr_info(all, State, "vdr_processor:do_send_data_to_vdr(...) final message : ID (~p), FlowIdx (~p), Msg (~p)", [Pid, ID, FlowIdx, Msg]);
                         Msg == <<>> andalso ID == 16#8702 ->
                             do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State),
                             get_new_flow_index(FlowIdx);
@@ -977,20 +661,17 @@ do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State) when is_binary(Msg),
                 MsgRespTypeBytes = binary:part(FinalMsgResult, FinalMsgResultLen-5, 2),
                 if
                     MsgRespTypeBytes =/= <<2,0>> andalso MsgRespTypeBytes =/= <<0,2>> andalso MsgRespTypeBytes =/= <<1,2>> ->
-                        common:loginfo("Msg2VDR(~p, ~p) : ~p", [MsgTypeBytes, MsgRespTypeBytes, Msg]);
+                        mslog:log_vdr_info(all, State, "vdr_processor:do_send_msg2vdr(...) (~p, ~p) : ~p", [MsgTypeBytes, MsgRespTypeBytes, Msg]);
                     true ->
                         ok
                 end;
             true ->
-                common:loginfo("Msg2VDR(~p) : ~p", [MsgTypeBytes, Msg])
+                mslog:log_vdr_info(all, State, "vdr_processor:do_send_msg2vdr(...) (~p) : ~p", [MsgTypeBytes, Msg])
         end
     catch
         _:_ ->
             ok
     end,
-    %common:loginfo("=>VDR : begin"),
-    %safe_save_msg_4_vdr(Msg, State, false),
-    %common:loginfo("=>VDR : ~p", [Msg]),
     save_msg_4_vdr(State, false, Msg),
     try
         %common:loginfo("Socket : ~p", [Socket]),
