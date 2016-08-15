@@ -97,7 +97,7 @@ do_parse_data(State, Data) ->
                                         {error, parseerror} ->
                                             mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_ERROR),
                                             mslog:log_vdr_info(error, State, "vdr_data_processor:do_parse_data(...) : parsing message (id ~p) fails, data ~p", [ID, Data]),
-                                            {warning, HeadInfo, parseerror, State};
+                                            {warning, HeadInfo, ?P_GENRESP_ERRMSG, State};
                                         {error, parseexception} ->
                                             mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_EXCEPTION),
                                             % Don't need display message here because vdr_msg_processor:parse_msg_body(...) has already done it.
@@ -105,7 +105,7 @@ do_parse_data(State, Data) ->
                                         {error, unsupported} ->
                                             mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_UNSUPPORTED_ID),
                                             % Don't need display message here because vdr_msg_processor:parse_msg_body(...) has already done it.
-                                            {warning, HeadInfo, ?P_GENRESP_ERRMSG, State}
+                                            {warning, HeadInfo, ?P_GENRESP_NOTSUPPORT, State}
                                     end;
                                 BodyLen =/= ActBodyLen ->
 									mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_LEN_MISMATCH),
@@ -138,20 +138,28 @@ do_parse_data(State, Data) ->
                                                     case combine_msg_packs(State, ID, MsgIdx, Total, Index, Body) of
                                                         {complete, Msg, NewState} ->
                                                             vdr_handler:logvdr(info, State, "combined MSG (ID ~p): ~p", [ID, Msg]),
-                                                            case vdr_data_processor:parse_msg_body(ID, Msg) of
+                                                            case vdr_msg_processor:parse_msg_body(ID, Body) of
                                                                 {ok, Result} ->
                                                                     {ok, HeadInfo, Result, NewState};
-                                                                {warning, msgerror} ->
+                                                                {error, parseerror} ->
+                                                                    mslog:log_vdr_statistics_info(NewState, ?CONN_STAT_PARSE_ERROR),
+                                                                    mslog:log_vdr_info(error, NewState, "vdr_data_processor:do_parse_data(...) : parsing message (id ~p) fails, data ~p", [ID, Data]),
                                                                     {warning, HeadInfo, ?P_GENRESP_ERRMSG, NewState};
-                                                                {warning, unsupported} ->
+                                                                {error, parseexception} ->
+                                                                    mslog:log_vdr_statistics_info(NewState, ?CONN_STAT_PARSE_EXCEPTION),
+                                                                    % Don't need display message here because vdr_msg_processor:parse_msg_body(...) has already done it.
+                                                                    {warning, HeadInfo, ?P_GENRESP_ERRMSG, NewState};
+                                                                {error, unsupported} ->
+                                                                    mslog:log_vdr_statistics_info(NewState, ?CONN_STAT_PARSE_UNSUPPORTED_ID),
+                                                                    % Don't need display message here because vdr_msg_processor:parse_msg_body(...) has already done it.
                                                                     {warning, HeadInfo, ?P_GENRESP_NOTSUPPORT, NewState}
                                                             end;
                                                         {notcomplete, NewState} ->
                                                             {ignore, HeadInfo, NewState}
                                                     end;
                                                 BodyLen =/= ActBodyLen ->
-													common:send_stat_err(State, lenerr),
-                                                    common:loginfo("Length error for msg (~p) from (~p) : (Field)~p:(Actual)~p", [MsgIdx, State#vdritem.addr, BodyLen, ActBodyLen]),
+													mslog:log_vdr_statistics_info(State, ?CONN_STAT_PARSE_LEN_MISMATCH),
+                                                    mslog:log_vdr_info(error, State, "vdr_data_processor:do_parse_data(...) : message id ~p, calculated length ~p =/= actual length ~p, data ~p", [ID, BodyLen, ActBodyLen, Data]),
                                                     {warning, HeadInfo, ?P_GENRESP_ERRMSG, State}
                                             end
                                     end
@@ -163,7 +171,7 @@ do_parse_data(State, Data) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
-%   0x7d and 0x7e are taken as 0x7d0x1 and 0x7d0x2 in transfer. This method is used to restore 0x7d0x1 and 0x7d0x2 to 0x7d and 0x7e
+%   0x7d and 0x7e are taken as 0x7d0x1 and 0x7d0x2 in transfer. This method is used tcommon:send_stat_erro restore 0x7d0x1 and 0x7d0x2 to 0x7d and 0x7e
 %   0x7d0x1 -> 0x7d & 0x7d0x2 -> 0x7e
 % Parameter :
 %       State   :

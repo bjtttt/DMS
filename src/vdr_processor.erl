@@ -66,182 +66,17 @@ safe_process_vdr_msg(Socket, Msg, State) ->
 process_vdr_data(Socket, Data, State) -> 
     mslog:log_vdr_info(all, State, "data ~p", Data),
     case vdr_data_parser:safe_parse_data(State, Data) of
-        {ok, HeadInfo, Msg, NewStateOrigin} ->
-            {ID, MsgIdx, Tel, CryptoType} = HeadInfo,
-            NewState = NewStateOrigin#vdritem{encrypt=convert_crytotype(CryptoType)},
-            if
-                NewState#vdritem.id == undefined ->
-                    case ID of
-                        16#100 ->
-                            % Registration
-                            {ok, NewState};
-                        16#102 ->
-                            % authorization
-                            {ok, NewState};
-                        true ->
-                            mslog:log_vdr_info(error, State, "unregistered/unauthorized VDR"),
-                            % Unauthorized/Unregistered VDR can only accept 16#100/16#102
-                            {error, ?CONN_STAT_DISC_AUTH, NewState}
-                    end;
-                true ->
-                    if
-                        ID =/= 16#2 orelse ID =/= 16#200 ->
-                            mslog:log_vdr_info(all, "msg id ~p, msg index ~p, msg tel ~p~ndata ~p", [ID, MsgIdx, Tel, Data])
-                    end,
-                    case ID of
-                        16#1 ->     % VDR general response
-                            {RespFlowIdx, RespID, Resp} = Msg,                            
-                            % Process reponse from VDR here
-                            mslog:log_vdr_info(all, "general response (16#1) : Response Flow Index (~p), Response ID (~p), Response (~p)", [RespFlowIdx, RespID, Resp]),                            
-                            if
-                                %RespID == 16#8003 orelse
-                                    RespID == 16#8103 orelse
-                                    RespID == 16#8203 orelse    % has issue
-                                    RespID == 16#8600 orelse    % need further tested
-                                    RespID == 16#8601 orelse
-                                    RespID == 16#8602 orelse    % need further tested
-                                    RespID == 16#8603 orelse
-                                    RespID == 16#8604 orelse    % need further tested
-                                    RespID == 16#8605 orelse
-                                    RespID == 16#8606 orelse    % need further tested
-                                    RespID == 16#8607 orelse
-                                    RespID == 16#8105 orelse
-                                    RespID == 16#8108 orelse
-                                    RespID == 16#8202 orelse
-                                    RespID == 16#8300 orelse
-                                    RespID == 16#8302 orelse
-                                    RespID == 16#8400 orelse
-                                    RespID == 16#8401 orelse
-                                    RespID == 16#8500 orelse
-                                    RespID == 16#8801 orelse
-                                    RespID == 16#8804
-                                  ->
-                                    {ok, NewState};
-                                true ->
-                                    {ok, NewState}
-                            end;
-                        16#2 ->     % VDR pulse
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_msg_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
-                            mslog:log_vdr_info(all, NewState, "general response ~p", [MsgBody]),
-                            NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        16#3 ->     % VDR unregistration
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
-                            mslog:log_vdr_info(all, NewState, "unregistration response ~p", [MsgBody]),
-                            NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
-                            % return error to terminate connection with VDR
-                            {error, ?CONN_STAT_DISC_UNREG, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        16#104 ->   % VDR parameter query
-                            {_RespIdx, _ActLen, _List} = Msg,
-                            % Process response from VDR here
-                            {ok, NewState};
-                        16#107 ->   % VDR property query
-                            {_Type, _ProId, _Model, _TerId, _ICCID, _HwVerLen, _HwVer, _FwVerLen, _FwVer, _GNSS, _Prop} = Msg,
-                            % Process response from VDR here
-                            {ok, NewState};
-                        16#108 ->
-                            {_Type, _Res} = Msg,
-                            % Process response from VDR here
-                            {ok, NewState};
-                        16#200 ->
-                            %[Msg, Address] = adjust_http_gps_position(Msg, NewState),
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
-                            NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        16#201 ->
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
-                            NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        16#301 ->
-                            {_Id} = Msg,
-                            
-                            {ok, NewState};
-                        16#302 ->
-                            {ok, NewState};
-                        16#303 ->
-                            {_MsgType, _POC} = Msg,
-                            
-                            {ok, NewState};
-                        16#500 ->
-                            {ok, NewState};
-                        16#700 ->
-                            {_Number, _OrderWord, _DB} = Msg,
-                            
-                            {ok, NewState};
-                        16#701 ->
-                            {_Length, _Content} = Msg,
-                            
-                            {ok, NewState};
-                        16#702 ->
-                            {ok, NewState};                            
-                        16#704 ->
-                            {_Len, _Type, _Positions} = Msg,
-                            
-                            {ok, NewState};
-                        16#705 ->
-                            {_Count, _Time, _Data} = Msg,
-                            
-                            {ok, NewState};
-                        16#800 ->
-                            {_MsgId, _MsgType, _MsgCode, _MsgEICode, _MsgPipeId} = Msg,
-                            
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
-                            NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
-
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        16#801 ->
-                            {MediaId, _Type, _Code, _EICode, _PipeId, _PosInfo, _Pack} = Msg,
-
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_multimedia_data_reply(MediaId),
-                            NewFlowIdx = send_data_to_vdr(16#8800, Tel, FlowIdx, MsgBody, NewState),
-                            
-                            [VDRItem] = ets:lookup(vdrtable, Socket),
-                            VDRTablePid = VDRItem#vdritem.vdrtablepid,
-                            NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
-                            common:send_vdr_table_operation(VDRTablePid, {insert, NewVDRItem}),
-                            
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                       16#805 ->
-                            {ok, NewState};
-                        16#802 ->
-                            {_FlowNum, _Len, _RespData} = Msg,
-                            
-                            {ok, NewState};
-                        16#900 ->
-                            {_Type, _Con} = Msg,
-                            
-                            {ok, NewState};
-                        16#901 ->
-                            {_Len, _Body} = Msg,
-                            
-                            {ok, NewState};
-                        16#A00 ->
-                            {_E, _N} = Msg,
-                            
-                            {ok, NewState};
-                        16#100 ->
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(NewState#vdritem.auth)),
-                            NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
-
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        16#102 ->
-                            FlowIdx = NewState#vdritem.msgflownum,
-                            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
-                            NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
-                            
-                            {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
-                        _ ->
-                            mslog:log_vdr_info(error, NewState, "unknown message id ~p", [ID]),
-                            {error, ?CONN_STAT_DISC_UNK_MSG_ERR, NewState}
-                    end
-            end;
+        {ok, HeadInfo, Msg, NewState} ->
+            process_pasred_messages(HeadInfo, Msg, NewState, Socket, Data);
+        {error, ErrorType, NewState} ->
+            % Only when message has parity error
+            {error, ErrorType, NewState};
+        {warning, HeaderInfo, ErrorType, NewState} ->
+            {ID, MsgIdx, _Tel, _CryptoType} = HeaderInfo,
+            FlowIdx = NewState#vdritem.msgflownum,
+            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ErrorType),
+            NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
+            {warning, NewState#vdritem{msgflownum=NewFlowIdx}};
         {ignore, HeaderInfo, NewState} ->
             {ID, MsgIdx, _Tel, _CryptoType} = HeaderInfo,
             FlowIdx = NewState#vdritem.msgflownum,
@@ -291,21 +126,189 @@ process_vdr_data(Socket, Data, State) ->
                     common:send_vdr_table_operation(VDRTablePid, {self(), insert, NewVDRItem, noresp}),
                     
                     {ok, NewState#vdritem{msgflownum=NewFlowIdx}}
-            end;
-        {warning, HeaderInfo, ErrorType, NewState} ->
-            {ID, MsgIdx, _Tel, _CryptoType} = HeaderInfo,
-            FlowIdx = NewState#vdritem.msgflownum,
-            MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ErrorType),
-            if
-                NewState#vdritem.dboperid == undefined ->
-                    NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
-                    {warning, NewState#vdritem{msgflownum=NewFlowIdx}};
+            end
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+process_pasred_messages(HeadInfo, Msg, State, Socket, Data) ->
+    {ID, MsgIdx, Tel, CryptoType} = HeadInfo,
+    NewState = State#vdritem{encrypt=convert_crytotype(CryptoType)},
+    if
+        NewState#vdritem.id == undefined ->
+            case ID of
+                16#100 ->
+                    % Registration
+                    {ok, NewState};
+                16#102 ->
+                    % authorization
+                    {ok, NewState};
                 true ->
-                    NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
-                    {warning, NewState#vdritem{msgflownum=NewFlowIdx}}
+                    mslog:log_vdr_info(error, NewState, "unregistered/unauthorized VDR"),
+                    % Unauthorized/Unregistered VDR can only accept 16#100/16#102
+                    {error, ?CONN_STAT_DISC_AUTH, NewState}
             end;
-        {error, _ErrorType, NewState} ->    % exception/parityerror/formaterror
-            {error, unvdrerror, NewState}
+        true ->
+            if
+                ID =/= 16#2 orelse ID =/= 16#200 ->
+                    mslog:log_vdr_info(all, "msg id ~p, msg index ~p, msg tel ~p~ndata ~p", [ID, MsgIdx, Tel, Data])
+            end,
+            case ID of
+                16#1 ->     % VDR general response
+                    {RespFlowIdx, RespID, Resp} = Msg,                            
+                    % Process reponse from VDR here
+                    mslog:log_vdr_info(all, "general response (16#1) : Response Flow Index (~p), Response ID (~p), Response (~p)", [RespFlowIdx, RespID, Resp]),                            
+                    if
+                        %RespID == 16#8003 orelse
+                            RespID == 16#8103 orelse
+                            RespID == 16#8203 orelse    % has issue
+                            RespID == 16#8600 orelse    % need further tested
+                            RespID == 16#8601 orelse
+                            RespID == 16#8602 orelse    % need further tested
+                            RespID == 16#8603 orelse
+                            RespID == 16#8604 orelse    % need further tested
+                            RespID == 16#8605 orelse
+                            RespID == 16#8606 orelse    % need further tested
+                            RespID == 16#8607 orelse
+                            RespID == 16#8105 orelse
+                            RespID == 16#8108 orelse
+                            RespID == 16#8202 orelse
+                            RespID == 16#8300 orelse
+                            RespID == 16#8302 orelse
+                            RespID == 16#8400 orelse
+                            RespID == 16#8401 orelse
+                            RespID == 16#8500 orelse
+                            RespID == 16#8801 orelse
+                            RespID == 16#8804
+                          ->
+                            {ok, NewState};
+                        true ->
+                            {ok, NewState}
+                    end;
+                16#2 ->     % VDR pulse
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_msg_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
+                    mslog:log_vdr_info(all, NewState, "general response ~p", [MsgBody]),
+                    NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+                16#3 ->     % VDR unregistration
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
+                    mslog:log_vdr_info(all, NewState, "unregistration response ~p", [MsgBody]),
+                    NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
+                    % return error to terminate connection with VDR
+                    {error, ?CONN_STAT_DISC_UNREG, NewState#vdritem{msgflownum=NewFlowIdx}};
+                16#104 ->   % VDR parameter query
+                    {_RespIdx, _ActLen, _List} = Msg,
+                    % Process response from VDR here
+                    {ok, NewState};
+                16#107 ->   % VDR property query
+                    {_Type, _ProId, _Model, _TerId, _ICCID, _HwVerLen, _HwVer, _FwVerLen, _FwVer, _GNSS, _Prop} = Msg,
+                    % Process response from VDR here
+                    {ok, NewState};
+                16#108 ->
+                    {_Type, _Res} = Msg,
+                    % Process response from VDR here
+                    {ok, NewState};
+                16#200 ->
+                    %[Msg, Address] = adjust_http_gps_position(Msg, NewState),
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
+                    NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+                16#201 ->
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
+                    NewFlowIdx = send_data_to_vdr(16#8001, NewState#vdritem.tel, FlowIdx, MsgBody, NewState),
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+                16#301 ->
+                    {_Id} = Msg,
+                    
+                    {ok, NewState};
+                16#302 ->
+                    {ok, NewState};
+                16#303 ->
+                    {_MsgType, _POC} = Msg,
+                    
+                    {ok, NewState};
+                16#500 ->
+                    {ok, NewState};
+                16#700 ->
+                    {_Number, _OrderWord, _DB} = Msg,
+                    
+                    {ok, NewState};
+                16#701 ->
+                    {_Length, _Content} = Msg,
+                    
+                    {ok, NewState};
+                16#702 ->
+                    {ok, NewState};                            
+                16#704 ->
+                    {_Len, _Type, _Positions} = Msg,
+                    
+                    {ok, NewState};
+                16#705 ->
+                    {_Count, _Time, _Data} = Msg,
+                    
+                    {ok, NewState};
+                16#800 ->
+                    {_MsgId, _MsgType, _MsgCode, _MsgEICode, _MsgPipeId} = Msg,
+                    
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
+                    NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
+
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+                16#801 ->
+                    {MediaId, _Type, _Code, _EICode, _PipeId, _PosInfo, _Pack} = Msg,
+
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_multimedia_data_reply(MediaId),
+                    NewFlowIdx = send_data_to_vdr(16#8800, Tel, FlowIdx, MsgBody, NewState),
+                    
+                    [VDRItem] = ets:lookup(vdrtable, Socket),
+                    VDRTablePid = VDRItem#vdritem.vdrtablepid,
+                    NewVDRItem = VDRItem#vdritem{msg=NewState#vdritem.msg},
+                    common:send_vdr_table_operation(VDRTablePid, {insert, NewVDRItem}),
+                    
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+               16#805 ->
+                    {ok, NewState};
+                16#802 ->
+                    {_FlowNum, _Len, _RespData} = Msg,
+                    
+                    {ok, NewState};
+                16#900 ->
+                    {_Type, _Con} = Msg,
+                    
+                    {ok, NewState};
+                16#901 ->
+                    {_Len, _Body} = Msg,
+                    
+                    {ok, NewState};
+                16#A00 ->
+                    {_E, _N} = Msg,
+                    
+                    {ok, NewState};
+                16#100 ->
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_reg_resp(MsgIdx, 0, list_to_binary(NewState#vdritem.auth)),
+                    NewFlowIdx = send_data_to_vdr(16#8100, Tel, FlowIdx, MsgBody, NewState),
+
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+                16#102 ->
+                    FlowIdx = NewState#vdritem.msgflownum,
+                    MsgBody = vdr_data_processor:create_gen_resp(ID, MsgIdx, ?T_GEN_RESP_OK),
+                    NewFlowIdx = send_data_to_vdr(16#8001, Tel, FlowIdx, MsgBody, NewState),
+                    
+                    {ok, NewState#vdritem{msgflownum=NewFlowIdx}};
+                _ ->
+                    mslog:log_vdr_info(error, NewState, "unknown message id ~p", [ID]),
+                    {error, ?CONN_STAT_DISC_UNK_MSG_ERR, NewState}
+            end
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
