@@ -16,7 +16,6 @@
          is_integer_string/1,
          is_dec_integer_string/1,
          is_hex_integer_string/1,
-         is_dec_list/1,
          convert_word_hex_string_to_integer/1,
 		 integer_to_binary/1,
          integer_to_2byte_binary/1,

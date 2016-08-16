@@ -242,6 +242,7 @@ is_integer_string(Value) when is_list(Value) ->
         Len < 1 ->
             false;
         true ->
+            % Need revisit
             Fun = fun(X) ->
                           if X >= 48 orelse X =< 57 -> 
                                  true;
