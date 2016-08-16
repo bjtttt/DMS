@@ -8,7 +8,8 @@
 
 -export([combine_strings/1,
          combine_strings/2,
-         is_string/1]).
+         is_string/1,
+         is_dec_list/1]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
