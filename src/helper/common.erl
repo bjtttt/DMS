@@ -32,68 +32,6 @@
 
 -export([safepeername/1, forcesafepeername/1, printsocketinfo/2, forceprintsocketinfo/2]).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%
-%%%
-%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
-							    		  PackLen > 0,
-										  is_binary(Data),
-										  PackLen =< byte_size(Data) ->
-	Bins = do_split_msg_to_packages(Data, PackLen),
-	Len = length(Bins),
-	if
-		Len > 1 ->
-			add_sub_pack_suffix_to_bin_list(Bins, [], Len);%,
-		true ->
-			Bins
-	end;
-split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
-							    		  PackLen > 0,
-										  is_binary(Data),
-										  PackLen >= byte_size(Data) ->
-	[Data];
-split_msg_to_packages(_Data, _PackLen) ->
-	[].
-
-do_split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
-							    		     PackLen > 0,
-										     is_binary(Data),
-											 PackLen < byte_size(Data) ->
-	Len = byte_size(Data),
-	if
-		PackLen >= Len ->
-			[Data];
-		true ->
-			H = binary:part(Data, 0, PackLen),
-			T = binary:part(Data, PackLen, Len-PackLen),
-			%common:loginfo("Total size ~p : New subpackage size ~p : Left size ~p~n~p", [Len, byte_size(H), byte_size(T), H]),
-			[H|do_split_msg_to_packages(T, PackLen)]
-	end;
-do_split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
-							    		     PackLen > 0,
-										     is_binary(Data),
-											 PackLen >= byte_size(Data)->
-	[Data];
-do_split_msg_to_packages(_Data, _PackLen) ->
-	[].
-
-add_sub_pack_suffix_to_bin_list(SrcList, DestList, TotalLen) when is_list(SrcList),
-																  length(SrcList) > 0,
-																  is_list(DestList) ->
-	DestLen = length(DestList),
-	[H|T] = SrcList,
-	HNew = list_to_binary([?SUB_PACK_INDI_HEADER,
-					       <<TotalLen:16>>,
-					       <<(DestLen+1):16>>,
-						   H]),
-	DestListNew = lists:merge(DestList, [HNew]),
-	add_sub_pack_suffix_to_bin_list(T, DestListNew, TotalLen);
-add_sub_pack_suffix_to_bin_list(_SrcList, DestList, _TotalLen) when is_list(DestList) ->
-	DestList;
-add_sub_pack_suffix_to_bin_list(_SrcList, _DestList, _TotalLen) ->
-	[].
 
 make_sure_n_byte_binary(Bin, N) when is_binary(Bin),
 									 N > 0 ->
@@ -263,10 +201,12 @@ set_sockopt(LSock, CSock, Msg) ->
             {error, Error}
     end.
 
-%%%
-%%% {ok {Address, Port}}
-%%% {error, Reason|Why}
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% {ok {Address, Port}}
+% {error, Reason|Why}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 safepeername(Socket) ->
 	try inet:peername(Socket) of
 		{ok, {Address, Port}} ->
@@ -278,10 +218,12 @@ safepeername(Socket) ->
 			{error, Reason}
 	end.
 
-%%%
-%%% {ok, {Address, Port}}
-%%% {ok, {"0.0.0.0", 0}}
-%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% {ok, {Address, Port}}
+% {ok, {"0.0.0.0", 0}}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 forcesafepeername(Socket) ->
 	try inet:peername(Socket) of
 		{ok, {Address, Port}} ->
@@ -304,133 +246,6 @@ printsocketinfo(Socket, Msg) ->
 forceprintsocketinfo(Socket, Msg) ->
     {ok, {Address, _Port}} = common:forcesafepeername(Socket),
     common:loginfo(string:concat(Msg, " IP : ~p~n"), [Address]).
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% true only when Value is NOT an empty integer string
-% For example, "81", "8A" and "0x8B" is true
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-is_integer_string(Value) when is_list(Value) ->
-    Len = length(Value),
-    if
-        Len < 1 ->
-            false;
-        true ->
-            Fun = fun(X) ->
-                          if X >= 48 orelse X =< 57 -> 
-								 true;
-							 X == 88 orelse X == 120 ->
-								 true;
-							 X >= 65 orelse X =< 70 ->
-								 true;
-							 X >= 97 orelse X =< 102 ->
-								 true;
-                             true -> 
-								 false
-                          end
-                  end,
-            lists:all(Fun, Value)
-    end;
-is_integer_string(_Value) ->
-    false.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-is_dec_list(List) when is_list(List),
-                       length(List) > 0 ->
-    
-    Fun = fun(X) ->
-                  case is_integer(X) of
-                      true -> true;
-                      _ -> false
-                  end
-          end,
-    lists:all(Fun, List).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Check whether "NNNN", "NN" or any string like this format to be a valid decimal string or not.
-% For example, "81" is true while "8A" is false
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-is_dec_integer_string(Value) when is_list(Value) ->
-    Len = length(Value),
-    if
-        Len < 1 ->
-            false;
-        true ->
-            Fun = fun(X) ->
-                          if 
-                              X < 48 orelse X > 57 -> 
-                                false;
-                              true -> true
-                          end
-                  end,
-            lists:all(Fun, Value)
-    end;
-is_dec_integer_string(_Value) ->
-    false.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Check whether "NNNN", "NN" or any string like this format to be a valid hex string or not.
-% For example, "81" and "8A" are both true
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-is_hex_integer_string(Value) when is_list(Value) ->
-    case is_integer_string(Value) of
-        true ->
-            Len = length(string:tokens(Value, "xX")),
-            if
-                Len == 2 ->
-                    true;
-                true ->
-                    false
-            end;
-        _ ->
-            false
-    end;
-is_hex_integer_string(_Value) ->
-    false.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% WordHexString : 32 bit
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-convert_word_hex_string_to_integer(WordHexStr) when is_list(WordHexStr) ->
-    case is_hex_integer_string(WordHexStr) of
-        true ->
-            [_Pre, Value] = string:tokens(WordHexStr, "xX"),
-			try
-				list_to_integer(Value, 16)
-			catch
-				_:_ ->
-					16#FFFF
-			end;
-        _ ->
-            0
-    end;
-convert_word_hex_string_to_integer(_WordHexStr) ->
-    0.
-
-get_str_bin_to_bin_list(S) when is_list(S),
-							    length(S) > 0 ->
-	B = list_to_binary(S),
-	get_str_bin_to_bin_list(B);
-get_str_bin_to_bin_list(S) when is_binary(S),
-							    byte_size(S) > 0 ->
-	H = binary:part(S, 0, 1),
-	T = binary:part(S, 1, byte_size(S)-1),
-	<<HInt:8>> = H,
-	[integer_to_list(HInt)|get_str_bin_to_bin_list(T)];
-get_str_bin_to_bin_list(_S) ->
-	[].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -493,30 +308,6 @@ send_vdr_table_operation(VDRTablePid, Oper) ->
             end,
             ok
     end.
-
-get_binary_from_list(List) when is_list(List) ->
-	try
-		erlang:list_to_binary(List)
-	catch
-		_:_ ->
-			<<"">>
-	end;
-get_binary_from_list(List) when is_binary(List) ->
-	List;
-get_binary_from_list(_List) ->
-	<<"">>.
-
-get_list_from_binary(Binary) when is_binary(Binary) ->
-	try
-		erlang:binary_to_list(Binary)
-	catch
-		_:_ ->
-			[]
-	end;
-get_list_from_binary(Binary) when is_list(Binary) ->
-	Binary;
-get_list_from_binary(_Binary) ->
-	[].
 
 
 

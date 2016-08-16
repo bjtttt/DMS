@@ -360,6 +360,13 @@ find_missing_msgidx(RequiredId, MsgPackages) when is_integer(RequiredId),
 find_missing_msgidx(_RequiredId, _MsgPackages) ->
     none.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+% Parameter :
+% Return :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 create_time_list_and_binary(Time) when is_integer(Time) ->
     <<Year:8, Month:8, Day:8, Hour:8, Minute:8, Second:8>> = <<Time:48>>,
     YearBin = common:integer_to_binary(common:convert_bcd_integer(Year)),
@@ -672,7 +679,7 @@ do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State) when is_binary(Msg),
         _:_ ->
             ok
     end,
-    save_msg_4_vdr(State, false, Msg),
+    mslog:save_msg_4_vdr(State, false, Msg),
     try
         %common:loginfo("Socket : ~p", [Socket]),
         gen_tcp:send(Socket, Msg)
@@ -719,7 +726,7 @@ do_send_msg2vdr(Pid, Socket, Msg, LinkPid, State) when is_list(Msg),
     %common:loginfo("=>VDR : begin"),
     %safe_save_msg_4_vdr(H, State, false),
     %common:loginfo("=>VDR : ~p", [H]),
-    save_msg_4_vdr(State, false, Msg),
+    mslog:save_msg_4_vdr(State, false, Msg),
     try
         %common:loginfo("Socket : ~p", [Socket]),
         gen_tcp:send(Socket, H)

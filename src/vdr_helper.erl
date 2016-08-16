@@ -7,7 +7,8 @@
 -include("../include/header.hrl").
 
 -export([split_msg_to_single/1,
-       bxorbytelist/1]).
+         bxorbytelist/1,
+         split_msg_to_packages/2]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -85,3 +86,76 @@ bxorbytelist(Data) ->
             <<Res>>
     end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%   If the length of the message which will be sent to VDR is larger than PackLen,
+%       it will be split to be several sub-messages with a MAX lenth of PackLen.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
+                                          PackLen > 0,
+                                          is_binary(Data),
+                                          PackLen =< byte_size(Data) ->
+    Bins = do_split_msg_to_packages(Data, PackLen),
+    Len = length(Bins),
+    if
+        Len > 1 ->
+            add_sub_pack_suffix_to_bin_list(Bins, [], Len);
+        true ->
+            Bins
+    end;
+split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
+                                          PackLen > 0,
+                                          is_binary(Data),
+                                          PackLen >= byte_size(Data) ->
+    [Data];
+split_msg_to_packages(_Data, _PackLen) ->
+    [].
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+do_split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
+                                             PackLen > 0,
+                                             is_binary(Data),
+                                             PackLen < byte_size(Data) ->
+    Len = byte_size(Data),
+    if
+        PackLen >= Len ->
+            [Data];
+        true ->
+            H = binary:part(Data, 0, PackLen),
+            T = binary:part(Data, PackLen, Len-PackLen),
+            [H|do_split_msg_to_packages(T, PackLen)]
+    end;
+do_split_msg_to_packages(Data, PackLen) when is_integer(PackLen),
+                                             PackLen > 0,
+                                             is_binary(Data),
+                                             PackLen >= byte_size(Data)->
+    [Data];
+do_split_msg_to_packages(_Data, _PackLen) ->
+    [].
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+add_sub_pack_suffix_to_bin_list(SrcList, DestList, TotalLen) when is_list(SrcList),
+                                                                  length(SrcList) > 0,
+                                                                  is_list(DestList) ->
+    DestLen = length(DestList),
+    [H|T] = SrcList,
+    HNew = list_to_binary([?SUB_PACK_INDI_HEADER,
+                           <<TotalLen:16>>,
+                           <<(DestLen+1):16>>,
+                           H]),
+    DestListNew = lists:merge(DestList, [HNew]),
+    add_sub_pack_suffix_to_bin_list(T, DestListNew, TotalLen);
+add_sub_pack_suffix_to_bin_list(_SrcList, DestList, _TotalLen) when is_list(DestList) ->
+    DestList;
+add_sub_pack_suffix_to_bin_list(_SrcList, _DestList, _TotalLen) ->
+    [].
