@@ -162,6 +162,11 @@ handle_info({inet_async, LSock, Ref, {ok, CSock}},
             {stop, Why, State}    
 	end;
 
+handle_info({tcp, Socket, Data}, State) ->  
+    common:printsocketinfo(Socket, "VDR server receives STRANGE data from"),
+    mslog:logerr("ERROR : VDR server receives STRANGE data : ~p", [Data]),
+    inet:setopts(Socket, [{active, once}]),
+    {noreply, State}; 
 handle_info({inet_async, LSock, Ref, Error}, #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=_LinkInfoPid}=State) ->  
     mslog:logerr("vdr_server:handle_info(...) : error : ~p", [Error]),
 	{stop, Error, State}; 

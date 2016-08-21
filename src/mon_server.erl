@@ -11,7 +11,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
          handle_info/2, terminate/2, code_change/3]). 
 
--include("header.hrl").
+-include("../include/header.hrl").
 
 %%%
 %%% In fact, we can get PortVDR from msgservertable.
@@ -135,8 +135,8 @@ handle_info({inet_async, LSock, Ref, {ok, CSock}}, #serverstate{lsock=LSock, acc
 %%% Data should not be received here because it is a listening socket process
 %%%
 handle_info({tcp, Socket, Data}, State) ->  
-    common:printsocketinfo(Socket, "Monitor server receives data from"),
-    mslog:logerr("ERROR : Monitor server receives data : ~p", [Data]),
+    common:printsocketinfo(Socket, "Monitor server receives STRANGE data from"),
+    mslog:logerr("ERROR : Monitor server receives STRANGE data : ~p", [Data]),
     inet:setopts(Socket, [{active, once}]),
     {noreply, State}; 
 handle_info({inet_async, LSock, Ref, Error}, #serverstate{lsock=LSock, acceptor=Ref}=State) ->    
