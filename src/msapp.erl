@@ -110,33 +110,43 @@ startserver(StartArgs) ->
     end,
     mslog:loginfo("Directories are initialized."),
     
+    LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
+    ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
+    
+    CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
+    ets:insert(msgservertable, {ccpid, CCPid}),
+                        
+    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
+    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
+    
+    % Do we really need it?
+    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
+    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
+
+    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
+    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
+
+    VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
+    ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
+
+    VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
+    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
+
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
             mslog:loghint("DMS starts initializing data structures."),
             case receive_redis_init_msg(UseRedis, 0) of
+                {error, RedisError} ->
+                    LinkInfoPid ! stop,
+                    CCPid ! stop,
+                    VdrTablePid ! stop,
+                    DriverTablePid ! stop,
+                    LastPosTablePid  ! stop,
+                    VDRLogPid ! stop,
+                    VDROnlinePid ! stop,
+                    {error, "Message server fails to start : " ++ RedisError};        
                 ok ->
-                    LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
-                    ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
-                    
-                    CCPid = spawn(fun() -> ccprocessor:code_convertor_process() end),
-                    ets:insert(msgservertable, {ccpid, CCPid}),
-                                        
-                    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
-                    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
-                    
-                    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
-                    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
-
-                    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
-                    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
-
-                    VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
-                    ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
-
-                    VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
-                    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
-                    
                     case init_vdr_db_table() of
                         {error, Msg0} ->
                             {error, Msg0};
@@ -168,9 +178,7 @@ startserver(StartArgs) ->
                                             end
                                     end
                             end
-                    end;
-                {error, RedisError} ->
-                    {error, "Message server fails to start : " ++ RedisError}                  
+                    end
             end;
         ignore ->
             mslog:logerr("Message server fails to start : ignore"),
