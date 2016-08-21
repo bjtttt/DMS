@@ -6,7 +6,17 @@
 
 -include("../include/header.hrl").
 
--export([process_vdr_msges/3]).
+-export([process_vdr_msges/3,
+         % Need revisit the following all methods which are added here temperarily for build warning
+         save_online_msg/2,
+         create_time_list_and_binary/1,
+         adjust_http_gps_position/2,
+         get_appinfo_area_line_alarm/1,
+         disconn_socket_by_id/1,
+         disconn_socket_by_vehicle_id/1,
+         get_driver_cert_code/1,
+         get_driver_cc_by_vdr_auth_code/2,
+         replace_pos_app_list/3]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -446,22 +456,6 @@ disconn_socket_by_vehicle_id(VehicleID) ->
                          '_'}),
     disconn_socket_by_id(SockList).
 
-check_alarm(State, VehicleID) ->
-    Pid = State#vdritem.pid,
-    DBOperationPid = State#vdritem.dboperid,
-    DBOperationPid ! {Pid, lookup, vdrdbtable, VehicleID},
-    receive
-        {Pid, Res} ->
-            case Res of
-                [] ->
-                    empty;
-                Alarms ->
-                    {ok, Alarms}
-            end
-    after ?DB_RESP_TIMEOUT * 3 ->
-            empty
-    end.
- 
 get_driver_cert_code(State) ->
     CertCode = State#vdritem.drivercertcode,
     case CertCode of
