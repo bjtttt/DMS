@@ -2,9 +2,9 @@
 % httpgps.erl
 %
 
--module(httpgps).
+-module(http_gps).
 
--include("../../include/header.hrl").
+-include("../include/header.hrl").
 
 -export([http_gps_deamon/7]).
 
@@ -33,7 +33,7 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                                "/coordinate/simple?sid=15001&xys=", 
                                                SRequest, 
                                                "&resType=xml&rid=123&key=1831beb01605f760589221fdd6f2cdfb7412a767dbc0f004854457f59fb16ab863a3a1722cef553f"]),
-                    log:loginfo("Normal Position : ~p", [FullRequest], DispLog)
+                    log:loginfo("Normal Position : ~p", [FullRequest], DispLog),
                     case State of
                         inited ->
                             try
@@ -52,19 +52,19 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                                             Lon = erlang:binary_to_float(LonBin),
                                                             Lat = erlang:binary_to_float(LatBin),
                                                             Request2 = [Lon, Lat],
-                                                            case convertrequest(Request2) of
+                                                            case convert_request(Request2) of
                                                                 {ok, SRequest2} ->
                                                                     FullRequest2 = lists:append(["http://",
                                                                                                 InitialIPPort, 
                                                                                                 "/rgeocode/simple?sid=7001&region=", 
                                                                                                 SRequest2, 
                                                                                                 "&poinum=1&range=3000&encode=UTF-8&resType=json&rid=$rid&roadnum=1&crossnum=0&show_near_districts=true&key=1831beb01605f760589221fdd6f2cdfb7412a767dbc0f004854457f59fb16ab863a3a1722cef553f"]),
-                                                                    log:loginfo("Normal Address : ~p", [FullRequest2], DispLog)
+                                                                    log:loginfo("Normal Address : ~p", [FullRequest2], DispLog),
                                                                     try
                                                                         case httpc:request(FullRequest2) of
                                                                             {ok, {{_Version2, 200, _ReasonPhrase2}, _Headers2, Body2}} ->
                                                                                 BodyB2 = list_to_binary(Body2),
-                                                                                FullAddrBin2 = get_full_address(BodyB2),
+                                                                                FullAddrBin2 = get_full_address(BodyB2, DispLog),
                                                                                 case FullAddrBin2 of
                                                                                     <<>> ->
                                                                                         Pid ! [Lon, Lat, []];
@@ -132,7 +132,7 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
             end;
         {Pid, abnormal, Request} ->
             [LonReq, LatReq] = Request,
-            case convertrequest(Request) of
+            case convert_request(Request) of
                 {ok, SRequest} ->
                     FullRequest = lists:append(["http://", 
                                                InitialIPPort, 
@@ -146,7 +146,7 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
                                 case httpc:request(FullRequest) of
                                     {ok, {{_Version, 200, _ReasonPhrase}, _Headers, Body}} ->
                                         BodyB = list_to_binary(Body),
-                                        FullAddrBin = get_full_address(BodyB),
+                                        FullAddrBin = get_full_address(BodyB, DispLog),
                                         case FullAddrBin of
                                             <<>> ->
                                                 Pid ! [LonReq, LatReq, []];
@@ -182,17 +182,17 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
             end;
         {server, IPPort} ->
             % Need restart?
-            http_gps_deamon(IPPort, State, Count, ACount, FCount, FACount, DispLog, DispLog);
+            http_gps_deamon(IPPort, State, Count, ACount, FCount, FACount, DispLog);
         enablelog ->
-            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog, 1);
+            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog);
         disablelog ->
-            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog, 0);
+            http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog);
         init ->
             case State of
                 uninit ->
                     case inets:start() of
                         ok ->
-                            http_gps_deamon(InitialIPPort, inited, 0, 0, 0, 0);
+                            http_gps_deamon(InitialIPPort, inited, 0, 0, 0, 0, 0);
                         {error, Reason} ->
                             log:loginfo("Cannot start HTTP GPS inets : ~p", [Reason], DispLog),
                             http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog)
@@ -240,7 +240,7 @@ http_gps_deamon(InitialIPPort, State, Count, ACount, FCount, FACount, DispLog) -
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_full_address(Body, DispLog) ->
-    log:loginfo("Body : ~p", [Body], DispLog)
+    log:loginfo("Body : ~p", [Body], DispLog),
     Province = get_province_name(Body),
     log:loginfo("Province : ~p", [Province], DispLog),
     City = get_city_name(Body),
@@ -262,7 +262,7 @@ get_full_address(Body, DispLog) ->
             Address = list_to_binary([Province, City, District, Road, BuildingAddress, BuildingName]),
             Address1 = binary:replace(Address, <<"(">>, <<"[">>, [global]),
             Address2 = binary:replace(Address1, <<")">>, <<"]">>, [global]),
-            log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address2), is_list(Address2), Address2], DispLog)
+            log:loginfo("Address : (Binary ~p, List ~p) ~p", [is_binary(Address2), is_list(Address2), Address2], DispLog),
             Address2;
         true ->
             Address = list_to_binary([Province, City, District, Road, BuildingAddress, BuildingName, BuildingDirection, BuildingDistance]),
@@ -597,14 +597,15 @@ get_building_distance(Body) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 convert_request(Request) when is_list(Request),
-                             length(Request) == 2 ->
+                              length(Request) == 2 ->
     [Lon, Lat] = Request,
     if
-        is_float(SLon) and is_float(SLat) ->
+        is_float(Lon) and is_float(Lat) ->
             SLon = erlang:float_to_list(Lon, [{decimals, 6}, compact]),
             SLat = erlang:float_to_list(Lat, [{decimals, 6}, compact]),
             {ok, lists:append([SLon, ",", SLat])};
         true ->
-            {ok, "0.0,0.0"};
-convertrequest(_Request) ->
+            {ok, "0.0,0.0"}
+    end;
+convert_request(_Request) ->
     error.

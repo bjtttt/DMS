@@ -3,7 +3,7 @@
 %%
 
 -module(eredis_sub).
--include("eredis.hrl").
+-include("../include/eredis.hrl").
 
 %% Default timeout for calls to the client gen_server
 %% Specified in http://www.erlang.org/doc/man/gen_server.html#call-3

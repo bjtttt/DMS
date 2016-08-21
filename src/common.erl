@@ -6,25 +6,7 @@
 
 -include("../include/header.hrl").
 
--export([split_msg_to_packages/2,
-		 number_list_to_binary/2,
-		 make_sure_n_byte_binary/2,
-		 convert_integer_to_binary_string_list/1,
-         convert_bcd_integer/1,
-		 convert_integer_bcd/1,
-         removemsgfromlistbyflownum/2,
-         is_integer_string/1,
-         is_dec_integer_string/1,
-         is_hex_integer_string/1,
-         convert_word_hex_string_to_integer/1,
-		 integer_to_binary/1,
-         integer_to_2byte_binary/1,
-		 integer_to_size_binary/2,
-		 integer_list_to_size_binary_list/2,
-         float_to_binary/1,
-		 send_vdr_table_operation/2,
-		 get_binary_from_list/1,
-		 get_list_from_binary/1]).
+-export([send_vdr_table_operation/2]).
 
 -export([set_sockopt/3]).
 
@@ -54,7 +36,7 @@ set_sockopt(LSock, CSock, Msg) ->
                     {error, Error}
             end;       
         Error ->           
-            common:loginfo(string:concat(Msg, " : prim_inet:setopts(CSock : ~p, Opts : ~p) fails : ~p"), [CSock, Opts, Error]),
+            mslog:loginfo(string:concat(Msg, " : prim_inet:setopts(...) fails : ~p"), [Error]),
             gen_tcp:close(CSock),
             {error, Error}
     end.
@@ -142,11 +124,11 @@ send_vdr_table_operation(VDRTablePid, Oper) ->
 		                                Res -> Res
 		                            end
 		                  end
-		            end;
+		            end,
+                    {modified, VDRTablePid1};
 				_ ->
 					ok
-			end,
-            {modified, VDRTablePid1};
+			end;
         _ ->
             case Oper of
                 {insert, _Object} ->
@@ -163,8 +145,7 @@ send_vdr_table_operation(VDRTablePid, Oper) ->
                     receive
                         Res -> Res
                     end
-            end,
-            ok
+            end
     end.
 
 

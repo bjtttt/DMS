@@ -10,8 +10,8 @@
 
 -module(eredis_sub_client).
 -behaviour(gen_server).
--include("eredis.hrl").
--include("eredis_sub.hrl").
+-include("../include/eredis.hrl").
+-include("../include/eredis_sub.hrl").
 
 
 %% API

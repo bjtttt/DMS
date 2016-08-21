@@ -4,7 +4,7 @@
 
 -module(cc_helper).
 
--include("../../include/header.hrl").
+-include("../include/header.hrl").
 
 -export([convert_utf8_to_gbk/1,
          convert_utf8_to_gbk/2,

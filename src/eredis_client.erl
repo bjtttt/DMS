@@ -23,7 +23,7 @@
 
 -module(eredis_client).
 -behaviour(gen_server).
--include("../../include/eredis/eredis.hrl").
+-include("../include/eredis/eredis.hrl").
 
 %% API
 -export([start_link/6, stop/1, select_database/2]).
