@@ -188,7 +188,9 @@ do_log(Format, CurLevel, DispErr) when is_list(Format),
                         DispLog =:= 1 ->
                             error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
                     end
-            end
+            end;
+        true ->
+            ok
     end;
 do_log(_Format, _CurLevel, _DispErr) ->
     ok.
