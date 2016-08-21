@@ -22,16 +22,16 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_link(LinkInfoPid) ->
-    msmslog:loghint("vdr_server:start_link(LinkInfoPid : ~p)", [LinkInfoPid]),
+    mslog:loghint("vdr_server:start_link(LinkInfoPid : ~p)", [LinkInfoPid]),
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [LinkInfoPid], []) of
         {ok, Pid} ->
-            msmslog:loginfo("vdr_server:start_link(LinkInfoPid : ~p) ok", [LinkInfoPid]),
+            mslog:loginfo("vdr_server:start_link(LinkInfoPid : ~p) ok", [LinkInfoPid]),
             {ok, Pid};
         ignore ->
-            msmslog:loghint("vdr_server:start_link(LinkInfoPid : ~p) fails : ignore", [LinkInfoPid]),
+            mslog:loghint("vdr_server:start_link(LinkInfoPid : ~p) fails : ignore", [LinkInfoPid]),
             ignore;
         {already_started, Pid} ->
-            msmslog:loghint("vdr_server:start_link(LinkInfoPid : ~p) fails : already_started : ~p", [LinkInfoPid, Pid]),
+            mslog:loghint("vdr_server:start_link(LinkInfoPid : ~p) fails : already_started : ~p", [LinkInfoPid, Pid]),
             {already_started, Pid}
     end.
 
