@@ -9,7 +9,24 @@
 -export([combine_strings/1,
          combine_strings/2,
          is_string/1,
-         is_dec_list/1]).
+         is_string_list/1,
+         is_dec_list/1,
+         convert_list_to_bin/1,
+         convert_bin_to_list/1,
+         convert_string_to_integer_dec/1,
+         force_convert_string_to_integer_dec/1,
+         convert_string_to_integer_hex/1,
+         force_convert_string_to_integer_hex/1,
+         make_sure_n_byte_binary/2,
+         integer_to_binary/1,
+         integer_to_size_binary/2,
+         convert_integer_to_binary_string_list/1,
+         integer_list_to_size_binary_list/2,
+         float_to_binary/1,
+         integer_to_2byte_binary/1,
+         convert_bcd_integer/1,
+         convert_integer_bcd/1,
+         number_list_to_binary/2]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
