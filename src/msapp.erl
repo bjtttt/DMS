@@ -47,7 +47,7 @@ start(_StartType, StartArgs) ->
 startserver(StartArgs) ->
     [UseRedisFlag, UseHttpGpsFlag] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
-    ets:insert(msgservertable, {displevel, ?DISP_LEVEL_HINT}),
+    ets:insert(msgservertable, {displevel, ?DISP_LEVEL_ALL}),
     ets:insert(msgservertable, {displog, 1}),
     if
         UseRedisFlag =:= 1 ->

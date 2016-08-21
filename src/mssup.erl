@@ -29,6 +29,7 @@
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_child_vdr(Socket, Addr) ->
+    mslog:loginfo("mssup:start_child_vdr(Socket : ~p, Addr : ~p)", [Socket, Addr]),
     case supervisor:start_child(sup_vdr_handler, [Socket, Addr]) of
         {ok, Pid} ->
             {ok, Pid};
@@ -37,11 +38,11 @@ start_child_vdr(Socket, Addr) ->
         {error, Reason} ->
             case Reason of
                 already_present ->
-                    common:loghint("mssup:start_child_vdr fails : already_present");
+                    mslog:loghint("mssup:start_child_vdr fails : already_present");
                 {already_strated, CPid} ->
-                    common:logerr("mssup:start_child_vdr fails : already_started PID : ~p", [CPid]);
+                    mslog:logerr("mssup:start_child_vdr fails : already_started PID : ~p", [CPid]);
                 Msg ->
-                    common:logerr("mssup:start_child_vdr fails : ~p", [Msg])
+                    mslog:logerr("mssup:start_child_vdr fails : ~p", [Msg])
             end,
             {error, Reason}
     end.         
@@ -57,6 +58,7 @@ start_child_vdr(Socket, Addr) ->
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_child_mon(Socket) ->
+    mslog:loginfo("mssup:start_child_mon(Socket : ~p)", [Socket]),
     case supervisor:start_child(sup_mon_handler, [Socket]) of
         {ok, Pid} ->
             {ok, Pid};
@@ -65,11 +67,11 @@ start_child_mon(Socket) ->
         {error, Reason} ->
             case Reason of
                 already_present ->
-                    common:loghint("mssup:start_child_mon fails : already_present");
+                    mslog:loghint("mssup:start_child_mon fails : already_present");
                 {already_strated, CPid} ->
-                    common:logerr("mssup:start_child_mon fails : already_started PID : ~p", [CPid]);
+                    mslog:logerr("mssup:start_child_mon fails : already_started PID : ~p", [CPid]);
                 Msg ->
-                    common:logerr("mssup:start_child_mon fails : ~p", [Msg])
+                    mslog:logerr("mssup:start_child_mon fails : ~p", [Msg])
             end,
             {error, Reason}
     end.          
@@ -81,6 +83,7 @@ start_child_mon(Socket) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 stop_child_vdr(Pid) ->
+    mslog:loginfo("mssup:stop_child_vdr(PID : ~p)", [Pid]),
     case supervisor:terminate_child(sup_vdr_handler, Pid) of
         ok ->
             ok;
@@ -96,11 +99,12 @@ stop_child_vdr(Pid) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 stop_child_mon(Pid) ->
+    mslog:loginfo("mssup:stop_child_mon(PID : ~p)", [Pid]),
     case supervisor:terminate_child(sup_mon_handler, Pid) of
         ok ->
             ok;
         {error, Reason} ->
-            mslog:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p~n", [Reason, Pid]),
+            mslog:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p", [Pid, Reason]),
             {error, Reason}
     end.
 
@@ -119,7 +123,7 @@ start_link() ->
         {ok, Pid} ->
             {ok, Pid};
         ignore ->
-            common:loghint("mssup:start_link : ignore~n"),
+            common:loghint("mssup:start_link : ignore"),
             ignore;
         {error, Reason} ->
             case Reason of
