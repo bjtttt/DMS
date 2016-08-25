@@ -12,7 +12,7 @@
 
 %host: 42.96.146.34
 %user: optimus
-%passwd: opt@123450
+%passwd: opt123450
 %port:3306
 %dbname: gps_database
 
