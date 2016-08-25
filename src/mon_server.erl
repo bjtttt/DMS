@@ -21,28 +21,28 @@
 %%%    Pid = pid()
 %%%  Error = {already_started,Pid} | term()
 %%%
-start_link(PortMon) ->
-    mslog:loginfo("mon_server:start_link(~p)", [PortMon]),
-    case gen_server:start_link({local, ?MODULE}, ?MODULE, [PortMon], []) of
+start_link([]) ->
+    mslog:loghint("mon_server:start_link()"),
+    case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
         {ok, Pid} ->
             {ok, Pid};
         ignore ->
-            mslog:logerr("mssup:start_child_mon(~p) fails : ignore", [PortMon]),
+            mslog:logerr("mssup:start_child_mon() fails : ignore"),
             ignore;
         {already_started, Pid} ->
-            mslog:logerr("mssup:start_child_mon(~p) fails : already_started : ~p", [PortMon, Pid]),
+            mslog:logerr("mssup:start_child_mon() fails : already_started : ~p", [ Pid]),
             {already_started, Pid}
     end.
 
 %%%
 %%% {backlog, 30} specifies the length of the OS accept queue. 
 %%%
-init([PortMon]) ->
-    mslog:loginfo("mon_server:init(PortMon : ~p)", [PortMon]),
+init([]) ->
+    mslog:loghint("mon_server:init()"),
     process_flag(trap_exit, true),    
     Opts = [binary, {packet, 0}, {reuseaddr, true}, {keepalive, true}, {active, once}],    
     % Management server start listening
-    case gen_tcp:listen(PortMon, Opts) of       
+    case gen_tcp:listen(?DEF_PORT_MON, Opts) of       
         {ok, LSock} -> 
             % Create first accepting process            
             case prim_inet:async_accept(LSock, -1) of
