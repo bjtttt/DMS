@@ -45,18 +45,9 @@ init([CSock, Addr, LinkInfoPid]) ->
                      vdrlogpid=VDRLogPid, 
                      vdronlinepid=VDROnlinePid},
 	mslog:log_vdr_statistics_info(State, ?CONN_STAT_CONN),
-    set_sock_opts(CSock),
+    common:set_sock_opts(CSock),
     logger:log_vdr_info(all, State, "Initilized."),
     {ok, State, ?VDR_MSG_TIMEOUT}.       
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Parameter :
-%       CSock   :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-set_sock_opts(CSock) ->
-    inet:setopts(CSock, [binary, {active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -114,7 +105,7 @@ handle_info({tcp, Socket, Data}, PrevState) ->
 					mslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
                     {stop, ?CONN_STAT_DISC_ERR_CNT, State#vdritem{errorcount=ErrCount}};
                 true ->
-                    set_sock_opts(Socket),
+                    common:set_sock_opts(Socket),
                     {noreply, State#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
             end;    
         _ ->
@@ -128,11 +119,11 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                             msmslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
                             {stop, ?CONN_STAT_DISC_ERR_CNT, NewState#vdritem{errorcount=ErrCount}};
                         true ->
-                            set_sock_opts(Socket),
+                            common:set_sock_opts(Socket),
                             {noreply, NewState#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
                     end;
                 {ok, NewState} ->
-                    set_sock_opts(Socket),
+                    common:set_sock_opts(Socket),
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT}
             end
     end;
@@ -154,7 +145,7 @@ handle_info(Info, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 terminate(Reason, State) ->
-    mslog:logvdr(info, State, "terminate(Reason ~p, State)", [Reason]),
+    mslog:logvdr(info, State, "vdr_handler:terminate(Reason ~p, State)", [Reason]),
     Socket = State#vdritem.socket,
     VID = State#vdritem.id,
     VDRTablePid = State#vdritem.vdrtablepid,

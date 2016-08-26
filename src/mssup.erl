@@ -10,7 +10,7 @@
 
 -export([start_link/0]).
 
--export([start_child_vdr/2, start_child_mon/1]).
+-export([start_child_vdr/3, start_child_mon/3]).
 
 -export([stop_child_vdr/1, stop_child_mon/1]).
 
@@ -28,9 +28,9 @@
 %                  | term()
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_vdr(Socket, Addr) ->
+start_child_vdr(Socket, Addr, LinkInfoPid) ->
     mslog:loginfo("mssup:start_child_vdr(Socket : ~p, Addr : ~p)", [Socket, Addr]),
-    case supervisor:start_child(sup_vdr_handler, [Socket, Addr]) of
+    case supervisor:start_child(sup_vdr_handler, [Socket, Addr, LinkInfoPid]) of
         {ok, Pid} ->
             {ok, Pid};
         {ok, Pid, Info} ->
@@ -57,9 +57,9 @@ start_child_vdr(Socket, Addr) ->
 %                  | term()
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_mon(Socket) ->
-    mslog:loginfo("mssup:start_child_mon(Socket : ~p)", [Socket]),
-    case supervisor:start_child(sup_mon_handler, [Socket]) of
+start_child_mon(Socket, Addr, LinkInfoPid) ->
+    mslog:loginfo("mssup:start_child_mon(Socket : ~p, Addr : ~p)", [Socket, Addr]),
+    case supervisor:start_child(sup_mon_handler, [Socket, Addr, LinkInfoPid]) of
         {ok, Pid} ->
             {ok, Pid};
         {ok, Pid, Info} ->
@@ -194,7 +194,7 @@ init([]) ->
     % Listen Monitor connection
     MonServer = {
                  mon_server,                                    % Id       = internal id
-                 {mon_server, start_link, []},                  % StartFun = {M, F, A}
+                 {mon_server, start_link, [LinkInfoPid]},       % StartFun = {M, F, A}
                  permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor

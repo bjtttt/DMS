@@ -144,6 +144,8 @@
 -define(VDR_MSG_RESP_TIMEOUT,   5000).
 -define(CC_PID_TIMEOUT,         5000).
 
+-define(MON_MSG_TIMEOUT,      300000).
+
 -define(SUB_PACK_INDI_HEADER, <<255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255>>).
 
 %%%
@@ -232,7 +234,8 @@
                     wspid=undefined,
                     driverpid=undefined,
                     vdrlogpid=undefined,
-                    vdronlinepid=undefined
+                    vdronlinepid=undefined,
+                    linkinfopid=undefined
                  }).
 
 -record(mpitem, {  socket=undefined, 

@@ -8,9 +8,18 @@
 
 -export([send_vdr_table_operation/2]).
 
--export([set_sockopt/3]).
+-export([set_sockopt/3, set_sock_opts/1]).
 
 -export([safepeername/1, forcesafepeername/1, printsocketinfo/2, forceprintsocketinfo/2]).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameter :
+%       CSock   :
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+set_sock_opts(CSock) ->
+    inet:setopts(CSock, [binary, {active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -78,14 +87,14 @@ forcesafepeername(Socket) ->
 printsocketinfo(Socket, Msg) ->
     case common:safepeername(Socket) of
         {ok, {Address, _Port}} ->
-            common:loginfo(string:concat(Msg, " from IP : ~p~n"), [Address]);
+            common:loginfo(string:concat(Msg, " from IP : ~p"), [Address]);
         {error, Error} ->
-            common:loginfo(string:concat(Msg, " from unknown IP : ~p~n"), [Error])
+            common:loginfo(string:concat(Msg, " from unknown IP : ~p"), [Error])
     end.
 
 forceprintsocketinfo(Socket, Msg) ->
     {ok, {Address, _Port}} = common:forcesafepeername(Socket),
-    common:loginfo(string:concat(Msg, " IP : ~p~n"), [Address]).
+    common:loginfo(string:concat(Msg, " IP : ~p"), [Address]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

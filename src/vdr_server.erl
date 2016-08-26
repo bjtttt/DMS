@@ -99,11 +99,14 @@ handle_cast(_Msg, State) ->
 handle_info({inet_async, LSock, Ref, {ok, CSock}},
             #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=LinkInfoPid}=State) ->
     try        
-		case common:set_sockopt(LSock, CSock, "vdr_server:handle_info({inet_async...)") of	        
+		case common:set_sockopt(LSock, CSock, "vdr_server:handle_info({inet_async...):set_sockopt") of	        
 			ok -> 
 				ok;	        
 			{error, Reason} -> 
                 mslog:logerr("vdr_server:handle_info({inet_async...) : common:set_sockopt(LSock : ~p, CSock : ~p, ...) fails : ~p", [LSock, CSock, Reason]),
+                % Why use exit here?
+                % {stop, set_sockpt, Reason}
+                % Please consider it in the future
                 exit({set_sockopt, Reason})       
 		end,
 		% New client connected

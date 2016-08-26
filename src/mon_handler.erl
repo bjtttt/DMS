@@ -2,54 +2,68 @@
 
 -behaviour(gen_server).
 
--export([start_link/1]).
+-export([start_link/3]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("../include/header.hrl").
 
-start_link(Socket) ->   
-    gen_server:start_link(?MODULE, [Socket], []). 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+start_link(CSock, Addr, LinkInfoPid) ->   
+    mslog:logall("mon_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
+    gen_server:start_link(?MODULE, [CSock, Addr, LinkInfoPid], []). 
 
-init([Socket]) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+init([CSock, Addr, LinkInfoPid]) ->
 	process_flag(trap_exit, true),
 	[{drivertablepid, DriverTablePid}] = ets:lookup(msgservertable, drivertablepid),
 	[{vdrlogpid, VDRLogPid}] = ets:lookup(msgservertable, vdrlogpid),
 	[{vdronlinepid, VDROnlinePid}] = ets:lookup(msgservertable, vdronlinepid),
-    case common:safepeername(Socket) of
-        {ok, {Address, _Port}} ->
-            State=#monitem{socket=Socket, pid=self(), addr=Address, driverpid=DriverTablePid, vdrlogpid=VDRLogPid, vdronlinepid=VDROnlinePid},
-            ets:insert(montable, State), 
-            inet:setopts(Socket, [{active, once}]),
-            {ok, State};
-        {error, _Reason} ->
-            State=#monitem{socket=Socket, pid=self(), addr="0.0.0.0", driverpid=DriverTablePid, vdrlogpid=VDRLogPid, vdronlinepid=VDROnlinePid},
-            ets:insert(montable, State), 
-            inet:setopts(Socket, [{active, once}]),
-            {ok, State}
-    end.            
+    State=#monitem{socket=CSock, 
+                   pid=self(), 
+                   addr=Addr, 
+                   driverpid=DriverTablePid, 
+                   vdrlogpid=VDRLogPid, 
+                   vdronlinepid=VDROnlinePid, 
+                   linkinfopid=LinkInfoPid},
+    ets:insert(montable, State), 
+    common:set_sock_opts(CSock),
+    logger:log_vdr_info(all, State, "Initilized."),
+    {ok, State, ?MON_MSG_TIMEOUT}.       
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_call(_Request, _From, State) ->
     {noreply, ok, State}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_cast(_Msg, State) ->    
     {noreply, State}. 
 
 handle_info({tcp, Socket, Data}, State) ->    
-    %common:loginfo("Data from monitor (~p) : ~p~n", [State#monitem.addr, Data]),
     Resp = mon_data_parser:parse_data(Data, State),
     gen_tcp:send(Socket, Resp),
-    %common:loginfo("Response to monitor (~p) : ~p~n", [State#monitem.addr, Resp]),
-    inet:setopts(Socket, [{active, once}]),
+    common:set_sock_opts(Socket),
     {noreply, State}; 
 handle_info({tcp_closed, _Socket}, State) ->    
-    mslog:logerr("Monitor ~p is disconnected and monitor PID ~p stops~n", [State#monitem.addr, State#monitem.pid]),
+    mslog:logvdr(error, State, "mon_handler:handle_info(...) tcp_closed", []),
     {stop, normal, State}; 
-handle_info(_Info, State) ->    
-    {noreply, State}. 
+handle_info(timeout, State) ->
+    mslog:logvdr(error, State, "mon_handler:handle_info(...) timeout", []),
+    {stop, vdrtimeout, State};
+handle_info(Info, State) ->   
+    mslog:logvdr(error, State, "mon_handler:handle_info(...) unknown ~p", [Info]),
+    {stop, unknown, State}.
 
 terminate(Reason, State) ->
-    mslog:loghint("Monitor (~p) starts being terminated~nReason : ~p", [State#monitem.addr, Reason]),
+    mslog:logvdr(info, State, "mon_handler:terminate(Reason ~p, State)", [Reason]),
 	ets:delete(montable, State#monitem.socket),
     try
 		gen_tcp:close(State#monitem.socket)
