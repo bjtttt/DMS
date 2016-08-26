@@ -168,7 +168,9 @@ do_log(Format, CurLevel, DispErr) when is_list(Format),
                                        CurLevel >= ?DISP_LEVEL_ALL,
                                        DispErr =< 1,
                                        DispErr >= 0 ->
-    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+    DispLogs = ets:lookup(msgservertable, displog),
+    error_logger:info_msg(DispLogs),
+    [{displog, DispLog}] = DispLogs,
     [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
     if
         DispLevel =< CurLevel ->
