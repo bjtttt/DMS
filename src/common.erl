@@ -104,7 +104,7 @@ forceprintsocketinfo(Socket, Msg) ->
 %       VDRTablePid :
 %       Oper        :
 % Return :
-%       ok | {modified, LinkInfoPid}
+%       ok | {modified, ConnInfoPid}
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 send_vdr_table_operation(VDRTablePid, Oper) ->

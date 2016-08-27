@@ -26,10 +26,10 @@
 -define(CONN_STAT_TEST,                 0).     %
 -define(CONN_STAT_CONN,                 1).     % Count for VDR connections
 -define(CONN_STAT_DISC_CHAR,            2).     % Disconnection count due to invalid characters in the message from VDR to the gateway
--define(CONN_STAT_DISC_REG,             3).     % Disconnection count due to unregiestered VDR
--define(CONN_STAT_DISC_AUTH,            4).     % Disconnection count due to error information from anthorized VDR
+-define(CONN_STAT_DISC_REG,             3).     % Disconnection count due to unregistered VDR
+-define(CONN_STAT_DISC_AUTH,            4).     % Disconnection count due to error information from authorized VDR
 -define(CONN_STAT_DISC_UNAUTH,          5).     % Disconnection count due to unanthorized VDR
--define(CONN_STAT_DISC_ERR_CNT,         6).     % Disconnection count due to VDR commununication error count reaches the MAX
+-define(CONN_STAT_DISC_ERR_CNT,         6).     % Disconnection count due to VDR communication error count reaches the MAX
 -define(CONN_STAT_DISC_CLI,             7).     % Disconnection count due to VDR requirement
 -define(CONN_STAT_DISC_LEN,             8).     % Disconnection count due to MSG length error
 -define(CONN_STAT_DISC_PARSE_PARITY,    9).     % Disconnection count due to MSG parity error
@@ -48,13 +48,13 @@
 -define(CONN_STAT_TO_GW,               22).     % Count for MSGes to gateway
 -define(CONN_STAT_FROM_GW,             23).     % Count for MSGes from gateway
 -define(CONN_STAT_UNK_ERR,             24).     % Unknown VDR error
--define(CONN_STAT_PARSE_ERROR,         25).     % Parsing : error
--define(CONN_STAT_PARSE_EXCEPTION,     26).     % Parsing : exception
--define(CONN_STAT_PARSE_UNSUPPORTED_ID,27).     % Parsing : unsupported message id
--define(CONN_STAT_PARSE_LEN_MISMATCH,  28).     % Parsing : calculated length =/= actual length
--define(CONN_STAT_PARSE_TOTAL_ERROR,   29).     % Parsing : total package number =< 1 for multiple messages
--define(CONN_STAT_PARSE_INDEX_SMALL,   30).     % Parsing : current package index < 1 for multiple messages
--define(CONN_STAT_PARSE_INDEX_LARGE,   31).     % Parsing : current package index > total package number for multiple messages
+-define(CONN_STAT_PARSE_ERROR,         25).     % Parsing: error
+-define(CONN_STAT_PARSE_EXCEPTION,     26).     % Parsing: exception
+-define(CONN_STAT_PARSE_UNSUPPORTED_ID,27).     % Parsing: unsupported message id
+-define(CONN_STAT_PARSE_LEN_MISMATCH,  28).     % Parsing: calculated length =/= actual length
+-define(CONN_STAT_PARSE_TOTAL_ERROR,   29).     % Parsing: total package number =< 1 for multiple messages
+-define(CONN_STAT_PARSE_INDEX_SMALL,   30).     % Parsing: current package index < 1 for multiple messages
+-define(CONN_STAT_PARSE_INDEX_LARGE,   31).     % Parsing: current package index > total package number for multiple messages
 -define(CONN_STAT_INFO_COUNT,          32).     % Count for connection status information, should be of the last one and for an indication of the length
 
 %

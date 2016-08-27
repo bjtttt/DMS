@@ -28,9 +28,9 @@
 %                  | term()
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_vdr(Socket, Addr, LinkInfoPid) ->
+start_child_vdr(Socket, Addr, ConnInfoPid) ->
     mslog:loginfo("mssup:start_child_vdr(Socket : ~p, Addr : ~p)", [Socket, Addr]),
-    case supervisor:start_child(sup_vdr_handler, [Socket, Addr, LinkInfoPid]) of
+    case supervisor:start_child(sup_vdr_handler, [Socket, Addr, ConnInfoPid]) of
         {ok, Pid} ->
             {ok, Pid};
         {ok, Pid, Info} ->
@@ -57,9 +57,9 @@ start_child_vdr(Socket, Addr, LinkInfoPid) ->
 %                  | term()
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_mon(Socket, Addr, LinkInfoPid) ->
+start_child_mon(Socket, Addr, ConnInfoPid) ->
     mslog:loginfo("mssup:start_child_mon(Socket : ~p, Addr : ~p)", [Socket, Addr]),
-    case supervisor:start_child(sup_mon_handler, [Socket, Addr, LinkInfoPid]) of
+    case supervisor:start_child(sup_mon_handler, [Socket, Addr, ConnInfoPid]) of
         {ok, Pid} ->
             {ok, Pid};
         {ok, Pid, Info} ->
@@ -142,7 +142,7 @@ start_link() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([]) ->
     mslog:loghint("mssup:init([])"),
-    [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
+    [{conninfopid, ConnInfoPid}] = ets:lookup(msgservertable, conninfopid),
     % Id        : used to identify the child specification internally by the supervisor.
     %             Notice that this identifier on occations has been called "name". 
     %             As far as possible, the terms "identifier" or "id" are now used but to keep backward compatibility, 
@@ -176,7 +176,7 @@ init([]) ->
     % Listen VDR connection
     VDRServer = {
                  vdr_server,                                    % Id       = internal id
-                 {vdr_server, start_link, [LinkInfoPid]},       % StartFun = {M, F, A}
+                 {vdr_server, start_link, [ConnInfoPid]},       % StartFun = {M, F, A}
                  permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor
@@ -194,7 +194,7 @@ init([]) ->
     % Listen Monitor connection
     MonServer = {
                  mon_server,                                    % Id       = internal id
-                 {mon_server, start_link, [LinkInfoPid]},       % StartFun = {M, F, A}
+                 {mon_server, start_link, [ConnInfoPid]},       % StartFun = {M, F, A}
                  permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor

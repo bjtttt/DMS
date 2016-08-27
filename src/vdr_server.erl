@@ -21,17 +21,17 @@
 %  Error = {already_started,Pid} | term()
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_link(LinkInfoPid) ->
-    mslog:loghint("vdr_server:start_link(LinkInfoPid : ~p)", [LinkInfoPid]),
-	case gen_server:start_link({local, ?MODULE}, ?MODULE, [LinkInfoPid], []) of
+start_link(ConnInfoPid) ->
+    mslog:loghint("vdr_server:start_link(ConnInfoPid : ~p)", [ConnInfoPid]),
+	case gen_server:start_link({local, ?MODULE}, ?MODULE, [ConnInfoPid], []) of
         {ok, Pid} ->
-            mslog:loginfo("vdr_server:start_link(LinkInfoPid : ~p) ok", [LinkInfoPid]),
+            mslog:loginfo("vdr_server:start_link(ConnInfoPid : ~p) ok", [ConnInfoPid]),
             {ok, Pid};
         ignore ->
-            mslog:loghint("vdr_server:start_link(LinkInfoPid : ~p) fails : ignore", [LinkInfoPid]),
+            mslog:loghint("vdr_server:start_link(ConnInfoPid : ~p) fails : ignore", [ConnInfoPid]),
             ignore;
         {already_started, Pid} ->
-            mslog:loghint("vdr_server:start_link(LinkInfoPid : ~p) fails : already_started : ~p", [LinkInfoPid, Pid]),
+            mslog:loghint("vdr_server:start_link(ConnInfoPid : ~p) fails : already_started : ~p", [ConnInfoPid, Pid]),
             {already_started, Pid}
     end.
 
@@ -40,22 +40,22 @@ start_link(LinkInfoPid) ->
 %
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init([LinkInfoPid]) ->
-    mslog:loghint("vdr_server:init(LinkInfoPid : ~p)", [LinkInfoPid]),
+init([ConnInfoPid]) ->
+    mslog:loghint("vdr_server:init(ConnInfoPid : ~p)", [ConnInfoPid]),
 	Opts = [binary, {packet, 0}, {reuseaddr, true}, {keepalive, true}, {active, once}],    
     case gen_tcp:listen(?DEF_PORT_VDR, Opts) of	    
 		{ok, LSock} -> 
-            mslog:loginfo("vdr_server:init(LinkInfoPid : ~p) : gen_tcp:listen ok", [LinkInfoPid]),
+            mslog:loginfo("vdr_server:init(ConnInfoPid : ~p) : gen_tcp:listen ok", [ConnInfoPid]),
 			case prim_inet:async_accept(LSock, -1) of
                 {ok, Ref} ->
-                    mslog:lognone("vdr_server:init(LinkInfoPid : ~p) : prim_inet:async_accept(LSock : ~p, -1) ok", [LinkInfoPid, LSock]),
-                    {ok, #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=LinkInfoPid}};
+                    mslog:lognone("vdr_server:init(ConnInfoPid : ~p) : prim_inet:async_accept(LSock : ~p, -1) ok", [ConnInfoPid, LSock]),
+                    {ok, #serverstate{lsock=LSock, acceptor=Ref, conninfopid=ConnInfoPid}};
                 Error ->
-                    mslog:logerr("vdr_server:init(LinkInfoPid : ~p) : prim_inet:async_accept(LSock : ~p, -1) fails : ~p", [LinkInfoPid, LSock, Error]),
+                    mslog:logerr("vdr_server:init(ConnInfoPid : ~p) : prim_inet:async_accept(LSock : ~p, -1) fails : ~p", [ConnInfoPid, LSock, Error]),
                     {stop, Error}
             end;
 		{error, Reason} ->	        
-            mslog:logerr("vdr_server:init(LinkInfoPid : ~p) : gen_tcp:listen fails : ~p", [LinkInfoPid, Reason]),
+            mslog:logerr("vdr_server:init(ConnInfoPid : ~p) : gen_tcp:listen fails : ~p", [ConnInfoPid, Reason]),
 			{stop, Reason}    
 	end. 
 
@@ -97,7 +97,7 @@ handle_cast(_Msg, State) ->
 %% @private
 %%-------------------------------------------------------------------------
 handle_info({inet_async, LSock, Ref, {ok, CSock}},
-            #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=LinkInfoPid}=State) ->
+            #serverstate{lsock=LSock, acceptor=Ref, conninfopid=ConnInfoPid}=State) ->
     try        
 		case common:set_sockopt(LSock, CSock, "vdr_server:handle_info({inet_async...):set_sockopt") of	        
 			ok -> 
@@ -115,7 +115,7 @@ handle_info({inet_async, LSock, Ref, {ok, CSock}},
             {error, Err} ->
                 mslog:logerr("vdr_server:handle_info(...) : common:safepeername(CSock : ~p) fails : ~p", [CSock, Err]);
             {ok, {Addr, _Port}} ->
-                case mssup:start_child_vdr(CSock, Addr, LinkInfoPid) of
+                case mssup:start_child_vdr(CSock, Addr, ConnInfoPid) of
                     {ok, Pid} ->
                         case gen_tcp:controlling_process(CSock, Pid) of
                             ok ->
@@ -170,7 +170,7 @@ handle_info({tcp, Socket, Data}, State) ->
     mslog:logerr("ERROR : VDR server receives STRANGE data : ~p", [Data]),
     inet:setopts(Socket, [{active, once}]),
     {noreply, State}; 
-handle_info({inet_async, LSock, Ref, Error}, #serverstate{lsock=LSock, acceptor=Ref, linkinfopid=_LinkInfoPid}=State) ->  
+handle_info({inet_async, LSock, Ref, Error}, #serverstate{lsock=LSock, acceptor=Ref, conninfopid=_LinkInfoPid}=State) ->  
     mslog:logerr("vdr_server:handle_info(...) : error : ~p", [Error]),
 	{stop, Error, State}; 
 handle_info(_Info, State) ->    

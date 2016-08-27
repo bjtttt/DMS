@@ -11,14 +11,14 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_link(CSock, Addr, LinkInfoPid) ->   
-    mslog:logall("mon_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
-    gen_server:start_link(?MODULE, [CSock, Addr, LinkInfoPid], []). 
+start_link(CSock, Addr, ConnInfoPid) ->   
+    mslog:logall("mon_handler:start_link(CSock ~p, Addr ~p, ConnInfoPid ~p)", [CSock, Addr, ConnInfoPid]),
+    gen_server:start_link(?MODULE, [CSock, Addr, ConnInfoPid], []). 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init([CSock, Addr, LinkInfoPid]) ->
+init([CSock, Addr, ConnInfoPid]) ->
 	process_flag(trap_exit, true),
 	[{drivertablepid, DriverTablePid}] = ets:lookup(msgservertable, drivertablepid),
 	[{vdrlogpid, VDRLogPid}] = ets:lookup(msgservertable, vdrlogpid),
@@ -29,7 +29,7 @@ init([CSock, Addr, LinkInfoPid]) ->
                    driverpid=DriverTablePid, 
                    vdrlogpid=VDRLogPid, 
                    vdronlinepid=VDROnlinePid, 
-                   linkinfopid=LinkInfoPid},
+                   conninfopid=ConnInfoPid},
     ets:insert(montable, State), 
     common:set_sock_opts(CSock),
     logger:log_vdr_info(all, State, "Initilized."),

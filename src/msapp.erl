@@ -110,8 +110,8 @@ startserver(StartArgs) ->
     end,
     mslog:loginfo("Directories are initialized."),
     
-    LinkInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
-    ets:insert(msgservertable, {linkinfopid, LinkInfoPid}),
+    ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
+    ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
     
     CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
     ets:insert(msgservertable, {ccpid, CCPid}),
@@ -138,7 +138,7 @@ startserver(StartArgs) ->
             mslog:loghint("DMS starts initializing data structures."),
             case receive_redis_init_msg(UseRedis, 0) of
                 {error, RedisError} ->
-                    LinkInfoPid ! stop,
+                    ConnInfoPid ! stop,
                     CCPid ! stop,
                     VdrTablePid ! stop,
                     DriverTablePid ! stop,
@@ -554,12 +554,12 @@ stop(_State) ->
         _ ->
             VdrTablePid ! stop
     end,
-    [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
-    case LinkInfoPid of
+    [{conninfopid, ConnInfoPid}] = ets:lookup(msgservertable, conninfopid),
+    case ConnInfoPid of
         undefined ->
             ok;
         _ ->
-            LinkInfoPid ! stop
+            ConnInfoPid ! stop
     end,
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
     case CCPid of

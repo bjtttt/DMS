@@ -14,15 +14,15 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_link(CSock, Addr, LinkInfoPid) ->
-    mslog:logall("vdr_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
-	gen_server:start_link(?MODULE, [CSock, Addr, LinkInfoPid], []). 
+start_link(CSock, Addr, ConnInfoPid) ->
+    mslog:logall("vdr_handler:start_link(CSock ~p, Addr ~p, ConnInfoPid ~p)", [CSock, Addr, ConnInfoPid]),
+	gen_server:start_link(?MODULE, [CSock, Addr, ConnInfoPid], []). 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init([CSock, Addr, LinkInfoPid]) ->
-    logger:logall("vdr_handler:init(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
+init([CSock, Addr, ConnInfoPid]) ->
+    logger:logall("vdr_handler:init(CSock ~p, Addr ~p, ConnInfoPid ~p)", [CSock, Addr, ConnInfoPid]),
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
     [{vdrtablepid, VDRTablePid}] = ets:lookup(msgservertable, vdrtablepid),
     [{drivertablepid, DriverTablePid}] = ets:lookup(msgservertable, drivertablepid),
@@ -37,7 +37,7 @@ init([CSock, Addr, LinkInfoPid]) ->
 					 errorcount=0, 
                      dbpid=unused,
                      ccpid=CCPid, 
-                     linkpid=LinkInfoPid, 
+                     linkpid=ConnInfoPid, 
 					 vdrtablepid=VDRTablePid, 
                      drivertablepid=DriverTablePid, 
                      lastpostablepid=LastPosTablePid,
@@ -68,9 +68,9 @@ handle_cast(_Msg, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_info({tcp, Socket, Data}, PrevState) ->
-	LinkInfoPid = PrevState#vdritem.linkpid,
+	ConnInfoPid = PrevState#vdritem.linkpid,
 	Pid = PrevState#vdritem.pid,
-	LinkInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
+	ConnInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
 	MidState = mslog:save_msg_4_vdr(PrevState, true, Data),
     mslog:logvdr(all, MidState, "vdr_handler:handle_info(...) data ~p", [Data]),
     % Update active time for VDR
