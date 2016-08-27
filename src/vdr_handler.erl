@@ -37,7 +37,7 @@ init([CSock, Addr, ConnInfoPid]) ->
 					 errorcount=0, 
                      dbpid=unused,
                      ccpid=CCPid, 
-                     linkpid=ConnInfoPid, 
+                     conninfopid=ConnInfoPid, 
 					 vdrtablepid=VDRTablePid, 
                      drivertablepid=DriverTablePid, 
                      lastpostablepid=LastPosTablePid,
@@ -68,7 +68,7 @@ handle_cast(_Msg, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_info({tcp, Socket, Data}, PrevState) ->
-	ConnInfoPid = PrevState#vdritem.linkpid,
+	ConnInfoPid = PrevState#vdritem.conninfopid,
 	Pid = PrevState#vdritem.pid,
 	ConnInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
 	MidState = mslog:save_msg_4_vdr(PrevState, true, Data),

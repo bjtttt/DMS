@@ -587,9 +587,9 @@ get_db_count_reponse(_Req) ->
 	end.
 
 get_link_info_reponse(_Req) ->
-	Res = ets:lookup(msgservertable, linkpid),
+	Res = ets:lookup(msgservertable, conninfopid),
 	case Res of
-		[{linkpid, LinkPid}] ->
+		[{conninfopid, LinkPid}] ->
 			if
 				LinkPid =/= undefined ->
 					LinkPid ! {self(), count},
@@ -640,9 +640,9 @@ get_link_info_reponse(_Req) ->
 	end.
 
 clear_link_info_reponse(_Req) ->
-	%Res = ets:lookup(msgservertable, linkpid),
+	%Res = ets:lookup(msgservertable, conninfopid),
 	%case Res of
-	%	[{linkpid, LinkPid}] ->
+	%	[{conninfopid, LinkPid}] ->
 	%		if
 	%			LinkPid =/= undefined ->
 	%				LinkPid ! {self(), clear}

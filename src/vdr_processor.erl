@@ -560,7 +560,7 @@ get_not_0_lat_lon(Lat, Lon, State) ->
 send_data_to_vdr(ID, Tel, FlowIdx, MsgBody, State) ->
     Socket = State#vdritem.socket,
     Pid = State#vdritem.pid,
-    LinkPid = State#vdritem.linkpid,    
+    LinkPid = State#vdritem.conninfopid,    
     case is_binary(MsgBody) of
         true ->
             MsgLen = byte_size(MsgBody),

@@ -326,8 +326,8 @@ do_log(_Format, _Data, _CurLevel, _DispErr) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_vdr_statistics_info(State, Type) ->
     if
-        State#vdritem.linkpid =/= undefined ->
-            State#vdritem.linkpid ! {self(), Type},
+        State#vdritem.conninfopid =/= undefined ->
+            State#vdritem.conninfopid ! {self(), Type},
             ok;
         true ->
             log_vdr_info(error, State, "undefined link info pid")

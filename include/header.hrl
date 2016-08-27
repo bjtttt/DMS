@@ -11,17 +11,15 @@
 -define(SUP_MAX_RESTART,    3).
 -define(SUP_MAX_TIME,       1).
 
--define(DEF_PORT_MYSQL,    3306).
--define(DEF_PORT_VDR,    6000).
--define(DEF_PORT_MON,     6001).
+-define(DEF_PORT_VDR,   6000).
+-define(DEF_PORT_MON,   6001).
 
--define(DEF_MYSQL_DB_NAME,    "gps_database").
+-define(DEF_MYSQL_DB_NAME,  "gps_database").
 -define(DEF_MYSQL_USERNAME, "optimus").
 -define(DEF_MYSQL_PASSWORD, "opt123450").
 -define(DEF_HTTPGPS_SERVER, "58.246.201.138:8081").
 
 -define(DEF_LOG_PATH, "/tmp").
-
 
 -define(CONN_STAT_TEST,                 0).     %
 -define(CONN_STAT_CONN,                 1).     % Count for VDR connections
@@ -75,36 +73,19 @@
 -define(MAX_DB_STORED_URGENT_COUNT, 100).
 -define(MAX_DB_PROC_WAIT_INTERVAL, 30000).
 
--define(DB_RESP_TIMEOUT, 30000).
 -define(PROC_RESP_TIMEOUT, 10000).
-
-%%% DB_SUP_MAX and DB_SUP_WITHIN are use in DB Supervisor for DB client restart mechanism
-%%% In development, they are 0 and 1 to make debug more easy and efficient.
-%%% When release, they should be 10 and 10 OR other better values
--define(DB_SUP_MAX, 0).
--define(DB_SUP_WITHIN, 1).
-
-%-define(LOG_DEBUG_INFO_ERR, 2).
-%-define(LOG_INFO_ERR, 1).
-%-define(LOG_ERR, 0).
 
 -define(WAIT_LOOP_INTERVAL, 1000).
 
 -define(TIMEOUT_VDR, 60000). 
 %-define(TIMEOUT_MAN, 30000). 
 -define(TIMEOUT_MON, 10000). 
--define(TIMEOUT_DB, 30000). 
 
 -define(TIMEOUT_CC_INIT_PROCESS, 5000). 
 -define(TIMEOUT_CC_PROCESS, 10000). 
 
--define(TIMEOUT_DB_PROCESS, 1000). 
--define(DB_PROCESS_TRIAL_MAX, 10). 
--define(DB_PROCESS_FAILURE_MAX, 10). 
-
 -define(TIMEOUT_DATA_MAN, 5). 
 -define(TIMEOUT_DATA_VDR, 5). 
--define(TIMEOUT_DATA_DB, 1). 
 
 -define(TIME_TERMINATE_VDR, 10000).
 -define(TIME_TERMINATE_MAN, 5000).
@@ -189,7 +170,7 @@
                     ccpid=undefined,
                     msgpackages={-1, []},
                     tel=0,
-                    linkpid=undefined,
+                    conninfopid=undefined,
                     vdrtablepid=undefined,
                     drivertablepid=undefined,
                     lastpostablepid=undefined,
@@ -235,7 +216,7 @@
                     driverpid=undefined,
                     vdrlogpid=undefined,
                     vdronlinepid=undefined,
-                    linkinfopid=undefined
+                    conninfopid=undefined
                  }).
 
 -record(mpitem, {  socket=undefined, 
@@ -265,13 +246,13 @@
                     wsacckey=undeifned
                  }).
 
--record(driverinfo, {    driverid=undefined,
+-record(driverinfo, {   driverid=undefined,
                         licno=undefined,
                         certcode=undefined,
                         vdrauthcode=undefined
                      }).
 
--record(lastposinfo, {    vehicleid=undefined,
+-record(lastposinfo, {  vehicleid=undefined,
                         longitude=0.0,
                         latitude=0.0
                      }).
@@ -283,7 +264,7 @@
 %
 -record(serverstate, { lsock = undefined, 
                        acceptor = undefined, 
-                       linkinfopid = undefined
+                       conninfopid = undefined
                      }).
 
 %% JSON - RFC 4627 - for Erlang
