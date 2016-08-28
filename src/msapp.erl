@@ -112,6 +112,9 @@ startserver(StartArgs) ->
     
     ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
     ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
+
+    EredisPid = spawn(fun() -> eredis_processor:eredis_process(ConnInfoPid) end),
+    ets:insert(msgservertable, {eredispid, EredisPid}),
     
     CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
     ets:insert(msgservertable, {ccpid, CCPid}),
@@ -554,6 +557,13 @@ stop(_State) ->
         _ ->
             VdrTablePid ! stop
     end,
+    [{eredispid, EredisPid}] = ets:lookup(msgservertable, eredispid),
+    case EredisPid of
+        undefined ->
+            ok;
+        _ ->
+            EredisPid ! stop
+    end,
     [{conninfopid, ConnInfoPid}] = ets:lookup(msgservertable, conninfopid),
     case ConnInfoPid of
         undefined ->
@@ -645,7 +655,8 @@ connection_info_process(List) ->
 %       Count       : 
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-receive_redis_init_msg(UseRedis, Count) ->
+receive_redis_init_msg(UseRedis, EredisPid, Count) ->
+    mslog:loghint("msapp:receive_redis_init_msg(UseRedis ~p, EredisPid ~p, Count ~p)", [UseRedis, EredisPid, Count]),
     if
         UseRedis =:= 1 ->
             if
@@ -653,10 +664,10 @@ receive_redis_init_msg(UseRedis, Count) ->
                     {error, "Redis is not ready"};
                 true ->
                     receive
-                        {"Redis", redisok} ->
+                        {EredisPid, redisok} ->
                             ok
                     after ?WAIT_LOOP_INTERVAL ->
-                            receive_redis_init_msg(UseRedis, Count+1)
+                        receive_redis_init_msg(UseRedis, EredisPid, Count+1)
                     end
             end;
         true ->

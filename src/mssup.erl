@@ -84,7 +84,9 @@ start_child_mon(Socket, Addr, ConnInfoPid) ->
 % startchild_err() = already_present
 %                  | {already_started, Child :: child()}
 %                  | term()
-% 
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% SEEMS TO BE OF NO USE
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_child_db(ConnInfoPid) ->
     mslog:loginfo("mssup:start_child_db(ConnInfoPid : ~p)", [ConnInfoPid]),
@@ -141,7 +143,9 @@ stop_child_mon(Pid) ->
 %
 % ok
 % {error, Error} : Error = not_found | simple_one_for_one
-%
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% SEEMS TO BE OF NO USE
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 stop_child_db(Pid) ->
     mslog:loginfo("mssup:stop_child_db(PID : ~p)", [Pid]),

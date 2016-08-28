@@ -172,7 +172,7 @@ do_log(Format, CurLevel, DispErr) when is_list(Format),
     error_logger:info_msg("DEBUG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"),
     error_logger:info_msg("DEBUG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"),
     error_logger:info_msg("DEBUG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"),
-    error_logger:info_msg(DispLogs),
+    error_logger:info_msg("DEBUG " +++ DispLogs),
     [{displog, DispLog}] = DispLogs,
     [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
     if

@@ -12,16 +12,17 @@
 %
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-eredis_process(ConnLinkPid) ->
+eredis_process(ConnInfoPid) ->
     receive
         {Pid, error} ->
             Pid ! ok,
-            eredis_error_process(ConnLinkPid);
+            eredis_error_process(ConnInfoPid);
         stop ->
-            ok;
+            mslog:loghint("Eredis process stops.");
         _ ->
-            ConnLinkPid ! {self(), redis_unknown_request},
-            eredis_process(ConnLinkPid)
+            mslog:loghint("Eredis process receive unknown msg."),
+            ConnInfoPid ! {self(), redis_unknown_request},
+            eredis_process(ConnInfoPid)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -29,15 +30,16 @@ eredis_process(ConnLinkPid) ->
 %
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-eredis_error_process(ConnLinkPid) ->
+eredis_error_process(ConnInfoPid) ->
     receive
         {Pid, ok} ->
             Pid ! ok,
-            eredis_process(ConnLinkPid);
+            eredis_process(ConnInfoPid);
         stop ->
-            ok;
+            mslog:loghint("Eredis error process stops.");
         _ ->
-            ConnLinkPid ! {self(), redis_unknown_request},
-            eredis_error_process(ConnLinkPid)
+            mslog:loghint("Eredis error process process receive unknown msg."),
+            ConnInfoPid ! {self(), redis_unknown_request},
+            eredis_error_process(ConnInfoPid)
     end.
 

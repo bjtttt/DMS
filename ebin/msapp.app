@@ -15,6 +15,7 @@
                 eredis_parser,
                 eredis_sub_client,
                 eredis_sub,
+                eredis_processor,
                 http_gps,
                 mon_data_parser,
                 mon_handler,
