@@ -14,6 +14,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 eredis_process(ConnInfoPid) ->
     receive
+        {Pid, test} ->
+            Pid ! ok,
+            eredis_process(ConnInfoPid);
         {Pid, error} ->
             Pid ! ok,
             eredis_error_process(ConnInfoPid);
@@ -32,6 +35,9 @@ eredis_process(ConnInfoPid) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 eredis_error_process(ConnInfoPid) ->
     receive
+        {Pid, test} ->
+            Pid ! error_ok,
+            eredis_error_process(ConnInfoPid);
         {Pid, ok} ->
             Pid ! ok,
             eredis_process(ConnInfoPid);

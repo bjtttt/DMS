@@ -139,17 +139,17 @@ startserver(StartArgs) ->
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
             mslog:loghint("DMS starts initializing data structures."),
-            case receive_redis_init_msg(UseRedis, 0) of
+            EredisPid ! init,
+            case receive_redis_init_msg(UseRedis, EredisPid, 0) of
                 {error, RedisError} ->
-                    ConnInfoPid ! stop,
-                    CCPid ! stop,
-                    VdrTablePid ! stop,
-                    DriverTablePid ! stop,
-                    LastPosTablePid  ! stop,
-                    VDRLogPid ! stop,
-                    VDROnlinePid ! stop,
-                    {error, "Message server fails to start : " ++ RedisError};        
-                ok ->
+                    stop(self()),
+                    {error, "Message server fails to start : " ++ RedisError};
+                Other ->
+                    case Other of
+                        {EredisPid, error_ok} ->
+                            EredisPid ! ok,
+                            mslog:loghint("Message server force redis process to be switched to ok.")
+                    end,
                     case init_vdr_db_table() of
                         {error, Msg0} ->
                             {error, Msg0};
