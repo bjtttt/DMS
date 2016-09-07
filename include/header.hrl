@@ -19,6 +19,8 @@
 -define(DEF_MYSQL_PASSWORD, "opt123450").
 -define(DEF_HTTPGPS_SERVER, "58.246.201.138:8081").
 
+-define(REDIS_INIT_TIME, 20).
+
 -define(DEF_LOG_PATH, "/tmp").
 
 -define(CONN_STAT_TEST,                 0).     %

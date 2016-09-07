@@ -139,7 +139,7 @@ startserver(StartArgs) ->
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
             mslog:loghint("DMS starts initializing data structures."),
-            EredisPid ! init,
+            EredisPid ! {self(), init},
             case receive_redis_init_msg(UseRedis, EredisPid, 0) of
                 {error, RedisError} ->
                     stop(self()),
@@ -660,7 +660,7 @@ receive_redis_init_msg(UseRedis, EredisPid, Count) ->
     if
         UseRedis =:= 1 ->
             if
-                Count > 2000000000000000000000 ->
+                Count > ?REDIS_INIT_TIME ->
                     {error, "Redis is not ready"};
                 true ->
                     receive
