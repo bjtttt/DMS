@@ -20,6 +20,8 @@ eredis_process(ConnInfoPid) ->
         {Pid, error} ->
             Pid ! ok,
             eredis_error_process(ConnInfoPid);
+        init ->
+            eredis_process(ConnInfoPid);
         stop ->
             mslog:loghint("Eredis process stops.");
         _ ->
@@ -41,6 +43,8 @@ eredis_error_process(ConnInfoPid) ->
         {Pid, ok} ->
             Pid ! ok,
             eredis_process(ConnInfoPid);
+        init ->
+            eredis_error_process(ConnInfoPid);
         stop ->
             mslog:loghint("Eredis error process stops.");
         _ ->
