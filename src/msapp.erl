@@ -656,11 +656,11 @@ connection_info_process(List) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 receive_redis_init_msg(UseRedis, EredisPid, Count) ->
-    mslog:loghint("msapp:receive_redis_init_msg(UseRedis ~p, EredisPid ~p, Count ~p)", [UseRedis, EredisPid, Count]),
+    %mslog:loghint("msapp:receive_redis_init_msg(UseRedis ~p, EredisPid ~p, Count ~p)", [UseRedis, EredisPid, Count]),
     if
         UseRedis =:= 1 ->
             if
-                Count > 20 ->
+                Count > 2000000000000000000000 ->
                     {error, "Redis is not ready"};
                 true ->
                     receive

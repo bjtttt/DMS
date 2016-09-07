@@ -141,27 +141,32 @@ do_log(Format, CurLevel, DispErr) when is_binary(Format),
                                        CurLevel >= ?DISP_LEVEL_ALL,
                                        DispErr =< 1,
                                        DispErr >= 0 ->
-    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
-    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
-    if
-        DispLevel =< CurLevel ->
-            try
-                if
-                    DispLog =:= 1 ->
-                        if
-                            DispErr == 0 ->
-                                error_logger:info_msg(binary_to_list(Format));
-                            true ->
-                                error_logger:error_msg(binary_to_list(Format))
-                        end
-                end
-            catch
-                Oper:Msg ->
+    try
+        [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+        [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+        if
+            DispLevel =< CurLevel ->
+                try
                     if
                         DispLog =:= 1 ->
-                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                            if
+                                DispErr == 0 ->
+                                    error_logger:info_msg(binary_to_list(Format));
+                                true ->
+                                    error_logger:error_msg(binary_to_list(Format))
+                            end
                     end
-            end
+                catch
+                    Oper:Msg ->
+                        if
+                            DispLog =:= 1 ->
+                                error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                        end
+                end
+        end
+    catch
+        Oper1:Msg1 ->
+            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper1, Msg1])
     end;
 do_log(Format, CurLevel, DispErr) when is_list(Format),
                                        CurLevel =< ?DISP_LEVEL_ERR,
@@ -169,8 +174,7 @@ do_log(Format, CurLevel, DispErr) when is_list(Format),
                                        DispErr =< 1,
                                        DispErr >= 0 ->
     try
-        DispLogs = ets:lookup(msgservertable, displog),
-        [{displog, DispLog}] = DispLogs,
+        [{displog, DispLog}] = ets:lookup(msgservertable, displog),
         [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
         if
             DispLevel =< CurLevel ->
