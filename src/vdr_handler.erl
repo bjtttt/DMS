@@ -14,15 +14,15 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_link(CSock, Addr, LinkInfoPid) ->
-    mslog:logall("vdr_handler:start_link(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
-	gen_server:start_link(?MODULE, [CSock, Addr, LinkInfoPid], []). 
+start_link(CSock, Addr, ConnInfoPid) ->
+    mslog:logall("vdr_handler:start_link(CSock ~p, Addr ~p, ConnInfoPid ~p)", [CSock, Addr, ConnInfoPid]),
+	gen_server:start_link(?MODULE, [CSock, Addr, ConnInfoPid], []). 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init([CSock, Addr, LinkInfoPid]) ->
-    logger:logall("vdr_handler:init(CSock ~p, Addr ~p, LinkInfoPid ~p)", [CSock, Addr, LinkInfoPid]),
+init([CSock, Addr, ConnInfoPid]) ->
+    logger:logall("vdr_handler:init(CSock ~p, Addr ~p, ConnInfoPid ~p)", [CSock, Addr, ConnInfoPid]),
     [{ccpid, CCPid}] = ets:lookup(msgservertable, ccpid),
     [{vdrtablepid, VDRTablePid}] = ets:lookup(msgservertable, vdrtablepid),
     [{drivertablepid, DriverTablePid}] = ets:lookup(msgservertable, drivertablepid),
@@ -37,7 +37,7 @@ init([CSock, Addr, LinkInfoPid]) ->
 					 errorcount=0, 
                      dbpid=unused,
                      ccpid=CCPid, 
-                     linkpid=LinkInfoPid, 
+                     conninfopid=ConnInfoPid, 
 					 vdrtablepid=VDRTablePid, 
                      drivertablepid=DriverTablePid, 
                      lastpostablepid=LastPosTablePid,
@@ -45,18 +45,9 @@ init([CSock, Addr, LinkInfoPid]) ->
                      vdrlogpid=VDRLogPid, 
                      vdronlinepid=VDROnlinePid},
 	mslog:log_vdr_statistics_info(State, ?CONN_STAT_CONN),
-    set_sock_opts(CSock),
+    common:set_sock_opts(CSock),
     logger:log_vdr_info(all, State, "Initilized."),
     {ok, State, ?VDR_MSG_TIMEOUT}.       
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Parameter :
-%       CSock   :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-set_sock_opts(CSock) ->
-    inet:setopts(CSock, [binary, {active, once}, {send_timeout, ?VDR_MSG_TIMEOUT}, {send_timeout_close, true}]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -77,9 +68,9 @@ handle_cast(_Msg, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 handle_info({tcp, Socket, Data}, PrevState) ->
-	LinkInfoPid = PrevState#vdritem.linkpid,
+	ConnInfoPid = PrevState#vdritem.conninfopid,
 	Pid = PrevState#vdritem.pid,
-	LinkInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
+	ConnInfoPid ! {Pid, ?CONN_STAT_FROM_GW},
 	MidState = mslog:save_msg_4_vdr(PrevState, true, Data),
     mslog:logvdr(all, MidState, "vdr_handler:handle_info(...) data ~p", [Data]),
     % Update active time for VDR
@@ -114,7 +105,7 @@ handle_info({tcp, Socket, Data}, PrevState) ->
 					mslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
                     {stop, ?CONN_STAT_DISC_ERR_CNT, State#vdritem{errorcount=ErrCount}};
                 true ->
-                    set_sock_opts(Socket),
+                    common:set_sock_opts(Socket),
                     {noreply, State#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
             end;    
         _ ->
@@ -128,11 +119,11 @@ handle_info({tcp, Socket, Data}, PrevState) ->
                             msmslog:log_vdr_statistics_info(State, ?CONN_STAT_DISC_ERR_CNT),
                             {stop, ?CONN_STAT_DISC_ERR_CNT, NewState#vdritem{errorcount=ErrCount}};
                         true ->
-                            set_sock_opts(Socket),
+                            common:set_sock_opts(Socket),
                             {noreply, NewState#vdritem{errorcount=ErrCount}, ?VDR_MSG_TIMEOUT}
                     end;
                 {ok, NewState} ->
-                    set_sock_opts(Socket),
+                    common:set_sock_opts(Socket),
                     {noreply, NewState#vdritem{errorcount=0}, ?VDR_MSG_TIMEOUT}
             end
     end;
@@ -154,7 +145,7 @@ handle_info(Info, State) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 terminate(Reason, State) ->
-    mslog:logvdr(info, State, "terminate(Reason ~p, State)", [Reason]),
+    mslog:logvdr(info, State, "vdr_handler:terminate(Reason ~p, State)", [Reason]),
     Socket = State#vdritem.socket,
     VID = State#vdritem.id,
     VDRTablePid = State#vdritem.vdrtablepid,

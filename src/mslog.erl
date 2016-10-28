@@ -141,56 +141,66 @@ do_log(Format, CurLevel, DispErr) when is_binary(Format),
                                        CurLevel >= ?DISP_LEVEL_ALL,
                                        DispErr =< 1,
                                        DispErr >= 0 ->
-    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
-    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
-    if
-        DispLevel =< CurLevel ->
-            try
-                if
-                    DispLog =:= 1 ->
-                        if
-                            DispErr == 0 ->
-                                error_logger:info_msg(binary_to_list(Format));
-                            true ->
-                                error_logger:error_msg(binary_to_list(Format))
-                        end
-                end
-            catch
-                Oper:Msg ->
+    try
+        [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+        [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+        if
+            DispLevel =< CurLevel ->
+                try
                     if
                         DispLog =:= 1 ->
-                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                            if
+                                DispErr == 0 ->
+                                    error_logger:info_msg(binary_to_list(Format));
+                                true ->
+                                    error_logger:error_msg(binary_to_list(Format))
+                            end
                     end
-            end
+                catch
+                    Oper:Msg ->
+                        if
+                            DispLog =:= 1 ->
+                                error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                        end
+                end
+        end
+    catch
+        Oper1:Msg1 ->
+            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper1, Msg1])
     end;
 do_log(Format, CurLevel, DispErr) when is_list(Format),
                                        CurLevel =< ?DISP_LEVEL_ERR,
                                        CurLevel >= ?DISP_LEVEL_ALL,
                                        DispErr =< 1,
                                        DispErr >= 0 ->
-    [{displog, DispLog}] = ets:lookup(msgservertable, displog),
-    [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
-    if
-        DispLevel =< CurLevel ->
-            try
-                if
-                    DispLog =:= 1 ->
-                        if
-                            DispErr == 0 ->
-                                error_logger:info_msg(Format);
-                            true ->
-                                error_logger:error_msg(Format)
-                        end
-                end
-            catch
-                Oper:Msg ->
+    try
+        [{displog, DispLog}] = ets:lookup(msgservertable, displog),
+        [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+        if
+            DispLevel =< CurLevel ->
+                try
                     if
                         DispLog =:= 1 ->
-                            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                            if
+                                DispErr == 0 ->
+                                    error_logger:info_msg(Format);
+                                true ->
+                                    error_logger:error_msg(Format)
+                            end
                     end
-            end;
-        true ->
-            ok
+                catch
+                    Oper:Msg ->
+                        if
+                            DispLog =:= 1 ->
+                                error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
+                        end
+                end;
+            true ->
+                ok
+        end
+    catch
+        Oper1:Msg1 ->
+            error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper1, Msg1])
     end;
 do_log(_Format, _CurLevel, _DispErr) ->
     ok.
@@ -321,8 +331,8 @@ do_log(_Format, _Data, _CurLevel, _DispErr) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_vdr_statistics_info(State, Type) ->
     if
-        State#vdritem.linkpid =/= undefined ->
-            State#vdritem.linkpid ! {self(), Type},
+        State#vdritem.conninfopid =/= undefined ->
+            State#vdritem.conninfopid ! {self(), Type},
             ok;
         true ->
             log_vdr_info(error, State, "undefined link info pid")

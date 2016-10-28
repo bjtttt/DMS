@@ -10,7 +10,7 @@
 
 -export([start_link/0]).
 
--export([start_child_vdr/2, start_child_mon/1]).
+-export([start_child_vdr/3, start_child_mon/3]).
 
 -export([stop_child_vdr/1, stop_child_mon/1]).
 
@@ -28,9 +28,9 @@
 %                  | term()
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_vdr(Socket, Addr) ->
+start_child_vdr(Socket, Addr, ConnInfoPid) ->
     mslog:loginfo("mssup:start_child_vdr(Socket : ~p, Addr : ~p)", [Socket, Addr]),
-    case supervisor:start_child(sup_vdr_handler, [Socket, Addr]) of
+    case supervisor:start_child(sup_vdr_handler, [Socket, Addr, ConnInfoPid]) of
         {ok, Pid} ->
             {ok, Pid};
         {ok, Pid, Info} ->
@@ -57,9 +57,9 @@ start_child_vdr(Socket, Addr) ->
 %                  | term()
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_mon(Socket) ->
-    mslog:loginfo("mssup:start_child_mon(Socket : ~p)", [Socket]),
-    case supervisor:start_child(sup_mon_handler, [Socket]) of
+start_child_mon(Socket, Addr, ConnInfoPid) ->
+    mslog:loginfo("mssup:start_child_mon(Socket : ~p, Addr : ~p)", [Socket, Addr]),
+    case supervisor:start_child(sup_mon_handler, [Socket, Addr, ConnInfoPid]) of
         {ok, Pid} ->
             {ok, Pid};
         {ok, Pid, Info} ->
@@ -75,6 +75,37 @@ start_child_mon(Socket) ->
             end,
             {error, Reason}
     end.          
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 
+% startchild_ret() = {ok, Child :: child()}
+%                  | {ok, Child :: child(), Info :: term()}
+%                  | {error, startchild_err()}
+% startchild_err() = already_present
+%                  | {already_started, Child :: child()}
+%                  | term()
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% SEEMS TO BE OF NO USE
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+start_child_db(ConnInfoPid) ->
+    mslog:loginfo("mssup:start_child_db(ConnInfoPid : ~p)", [ConnInfoPid]),
+    case supervisor:start_child(ti_client_db, [ConnInfoPid]) of
+        {ok, Pid} ->
+            {ok, Pid};
+        {ok, Pid, Info} ->
+            {ok, Pid, Info};
+        {error, Reason} ->
+            case Reason of
+                already_present ->
+                    common:loghint("mssup:start_child_db(ConnInfoPid : ~p) fails : already_present", [ConnInfoPid]);
+                {already_strated, CPid} ->
+                    common:logerr("mssup:start_child_db(ConnInfoPid : ~p) fails : already_started PID : ~p", [ConnInfoPid, CPid]);
+                Msg ->
+                    common:logerr("mssup:start_child_db(ConnInfoPid : ~p) fails : ~p", [ConnInfoPid, Msg])
+            end,
+            {error, Reason}
+    end.                    
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -105,6 +136,24 @@ stop_child_mon(Pid) ->
             ok;
         {error, Reason} ->
             mslog:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p", [Pid, Reason]),
+            {error, Reason}
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% ok
+% {error, Error} : Error = not_found | simple_one_for_one
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% SEEMS TO BE OF NO USE
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+stop_child_db(Pid) ->
+    mslog:loginfo("mssup:stop_child_db(PID : ~p)", [Pid]),
+    case supervisor:terminate_child(ti_client_db, Pid) of
+        ok ->
+            ok;
+        {error, Reason} ->
+            common:loginfo("mssup:stop_child_db fails(PID : ~p) : ~p", [Reason, Pid]),
             {error, Reason}
     end.
 
@@ -142,7 +191,7 @@ start_link() ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 init([]) ->
     mslog:loghint("mssup:init([])"),
-    [{linkinfopid, LinkInfoPid}] = ets:lookup(msgservertable, linkinfopid),
+    [{conninfopid, ConnInfoPid}] = ets:lookup(msgservertable, conninfopid),
     % Id        : used to identify the child specification internally by the supervisor.
     %             Notice that this identifier on occations has been called "name". 
     %             As far as possible, the terms "identifier" or "id" are now used but to keep backward compatibility, 
@@ -176,7 +225,7 @@ init([]) ->
     % Listen VDR connection
     VDRServer = {
                  vdr_server,                                    % Id       = internal id
-                 {vdr_server, start_link, [LinkInfoPid]},       % StartFun = {M, F, A}
+                 {vdr_server, start_link, [ConnInfoPid]},       % StartFun = {M, F, A}
                  permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor
@@ -194,7 +243,7 @@ init([]) ->
     % Listen Monitor connection
     MonServer = {
                  mon_server,                                    % Id       = internal id
-                 {mon_server, start_link, []},                  % StartFun = {M, F, A}
+                 {mon_server, start_link, [ConnInfoPid]},       % StartFun = {M, F, A}
                  permanent,                                     % Restart  = permanent | transient | temporary
                  brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
                  worker,                                        % Type     = worker | supervisor
@@ -209,7 +258,15 @@ init([]) ->
                   supervisor,                                   % Type     = worker | supervisor
                   []                                            % Modules  = [Module] | dynamic
                  },
-    Children = [VDRServer, VDRHandler, MonServer, MonHandler],
+    RedisClient  = {
+                 eredis,                                        % Id       = internal id
+                 {eredis, start_link, []},                      % StartFun = {M, F, A}
+                 permanent,                                     % Restart  = permanent | transient | temporary
+                 brutal_kill,                                   % Shutdown = brutal_kill | int() >= 0 | infinity
+                 worker,                                        % Type     = worker | supervisor
+                 [eredis]                                       % Modules  = [Module] | dynamic
+                },
+    Children = [VDRServer, VDRHandler, MonServer, MonHandler, RedisClient],
     % one_for_one - If one child process terminates and is to be restarted, only that child process is affected.
     %   If a child process terminates, only that process is restarted. This is the default restart strategy.
     % Assuming the values MaxR for intensity and MaxT for period, then, if more than MaxR restarts occur within MaxT seconds, 
