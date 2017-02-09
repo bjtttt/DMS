@@ -1,6 +1,10 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% header.hrl
+% header_const.hrl
 %
+% Including CONST definitions
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -define(DISP_LEVEL_ALL,     0).
 -define(DISP_LEVEL_NONE,    1).
@@ -79,9 +83,9 @@
 
 -define(WAIT_LOOP_INTERVAL, 1000).
 
--define(TIMEOUT_VDR, 60000). 
+-define(TIMEOUT_VDR, 60000).
 %-define(TIMEOUT_MAN, 30000). 
--define(TIMEOUT_MON, 10000). 
+-define(TIMEOUT_MON, 10000).
 
 -define(TIMEOUT_CC_INIT_PROCESS, 5000). 
 -define(TIMEOUT_CC_PROCESS, 10000). 
