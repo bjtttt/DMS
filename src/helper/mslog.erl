@@ -1,19 +1,20 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % mslog.erl
 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -module(mslog).
 
--include("../include/header.hrl").
+-include("../include/header_const.hrl").
+-include("../include/header_struct.hrl").
 
 -export([logall/1,
          logall/2,
-         lognone/1,
-         lognone/2,
          loginfo/1,
          loginfo/2,
-         loghint/1,
-         loghint/2,
+         logimp/1,
+         logimp/2,
          logerr/1,
          logerr/2,
          log_vdr_statistics_info/2,
@@ -115,8 +116,8 @@ loginfo(Format) ->
 % Parameter :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loghint(Format) ->
-    do_log(Format, ?DISP_LEVEL_HINT, 0).
+logwarn(Format) ->
+    do_log(Format, ?DISP_LEVEL_WARN, 0).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

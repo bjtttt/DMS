@@ -1,16 +1,15 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % header_const.hrl
 %
 % Including CONST definitions
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -define(DISP_LEVEL_ALL,     0).         % All messages
--define(DISP_LEVEL_NONE,    1).         % 
--define(DISP_LEVEL_INFO,    2).         % Information
--define(DISP_LEVEL_WARN,    3).         % Warnings
--define(DISP_LEVEL_ERR,     4).         % Errors
+-define(DISP_LEVEL_INFO,    1).         % Information
+-define(DISP_LEVEL_IMP,     2).         % Important
+-define(DISP_LEVEL_ERR,     3).         % Error
 
 -define(SUP_MAX_RESTART,    3).
 -define(SUP_MAX_TIME,       1).
