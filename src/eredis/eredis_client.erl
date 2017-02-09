@@ -20,10 +20,9 @@
 %%    waiting for in each element of the queue. Responses are queued until
 %%    we have all the responses we need and then reply with all of them.
 %%
-
 -module(eredis_client).
 -behaviour(gen_server).
--include("../include/eredis.hrl").
+-include("eredis.hrl").
 
 %% API
 -export([start_link/6, stop/1, select_database/2]).
@@ -104,6 +103,15 @@ handle_call(_Request, _From, State) ->
 handle_cast({request, Req}, State) ->
     case do_request(Req, undefined, State) of
         {reply, _Reply, State1} ->
+            {noreply, State1};
+        {noreply, State1} ->
+            {noreply, State1}
+    end;
+
+handle_cast({request, Req, Pid}, State) ->
+    case do_request(Req, Pid, State) of
+        {reply, Reply, State1} ->
+            safe_send(Pid, {response, Reply}),
             {noreply, State1};
         {noreply, State1} ->
             {noreply, State1}
@@ -280,8 +288,17 @@ receipient({_, From, _}) ->
 
 safe_reply(undefined, _Value) ->
     ok;
+safe_reply(Pid, Value) when is_pid(Pid) ->
+    safe_send(Pid, {response, Value});
 safe_reply(From, Value) ->
     gen_server:reply(From, Value).
+
+safe_send(Pid, Value) ->
+    try erlang:send(Pid, Value)
+    catch
+        Err:Reason ->
+            error_logger:info_msg("Failed to send message to ~p with reason ~p~n", [Pid, {Err, Reason}])
+    end.
 
 %% @doc: Helper for connecting to Redis, authenticating and selecting
 %% the correct database. These commands are synchronous and if Redis

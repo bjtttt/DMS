@@ -7,11 +7,10 @@
 %% queued and delivered when the client acknowledges receipt.
 %%
 %% There is one consuming process per eredis_sub_client.
-
 -module(eredis_sub_client).
 -behaviour(gen_server).
--include("../include/eredis.hrl").
--include("../include/eredis_sub.hrl").
+-include("eredis.hrl").
+-include("eredis_sub.hrl").
 
 
 %% API

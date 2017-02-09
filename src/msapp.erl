@@ -6,7 +6,8 @@
 
 -behaviour(application).
 
--include("../include/header.hrl").
+-include("../include/header_const.hrl").
+-include("../include/header_struct.hrl").
 
 -export([start/2, stop/1]).
 
