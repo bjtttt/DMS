@@ -6,10 +6,15 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-define(START_PARAM_COUN,   4).
+
 -define(DISP_LEVEL_ALL,     0).         % All messages
 -define(DISP_LEVEL_INFO,    1).         % Information
 -define(DISP_LEVEL_IMP,     2).         % Important
 -define(DISP_LEVEL_ERR,     3).         % Error
+
+-define(YES,                1).
+-define(NO,                 0).
 
 -define(SUP_MAX_RESTART,    3).
 -define(SUP_MAX_TIME,       1).

@@ -1,6 +1,8 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % msapp.erl
 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -module(msapp).
 
@@ -26,116 +28,52 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% start(_StartType, StartArgs)
+%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start(_StartType, StartArgs) ->
     Len = length(StartArgs),
     if
-        Len =:= 2 ->
-            startserver(StartArgs);
+        Len =:= ?START_PARAM_COUN ->
+            start_server(StartArgs);
         true ->
             mslog:loginfo("Parameter count error : ~p", [Len])
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% start_server(StartArgs)
+%
 % Parameters:
-%   redis   : 1         -> use Redis
-%             others    -> doesn't use Redis, for the capacity test
-%   HttpGps : 1         -> use HttpGps server
-%             others    -> doesn't use HttpGps server
+%   StartArgs   :   [Log, LogLevel, Redis, HttpGps]
+%
+%-----------------------------------------------------------------------------------------
+%
+%   Log         :
+%   LogLevel    :
+%   Redis       : 1     -> use Redis
+%                 0     -> doesn't use Redis, for the capacity test
+%   HttpGps     : 1     -> use HttpGps server
+%                 0     -> doesn't use HttpGps server
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-startserver(StartArgs) ->
-    [UseRedisFlag, UseHttpGpsFlag] = StartArgs,
+start_server(StartArgs) ->
+    [Log, LogLevel, Redis, HttpGps] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
-    ets:insert(msgservertable, {displevel, ?DISP_LEVEL_ALL}),
-    ets:insert(msgservertable, {displog, 1}),
-    if
-        UseRedisFlag =:= 1 ->
-            ets:insert(msgservertable, {useredis, 1});
-        true ->
-            ets:insert(msgservertable, {useredis, 0})
-    end,
-    [{useredis, UseRedis}] = ets:lookup(msgservertable, useredis),
-    if
-        UseHttpGpsFlag =:= 1 ->
-            ets:insert(msgservertable, {usehttpgps, 1});
-        true ->
-            ets:insert(msgservertable, {usehttpgps, 0})
-    end,
-    [{usehttpgps, UseHttpGps}] = ets:lookup(msgservertable, usehttpgps),
+    ets:insert(msgservertable, {displog, Log}),
+    ets:insert(msgservertable, {displevel, LogLevel}),
+    ets:insert(msgservertable, {useredis, Redis}),
+    ets:insert(msgservertable, {usehttpgps, HttpGps}),
     ets:insert(msgservertable, {redispid, undefined}),
     ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),
     
-    % Need revisit
-    ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(vdrdbtable,   [ordered_set, public, named_table, {keypos, #vdrdbitem.authencode},  {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(vdrtable,     [ordered_set, public, named_table, {keypos, #vdritem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(mantable,     [set,         public, named_table, {keypos, #manitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(usertable,    [set,         public, named_table, {keypos, #user.id},               {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(drivertable,  [set,         public, named_table, {keypos, #driverinfo.driverid},   {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(lastpostable, [set,         public, named_table, {keypos, #lastposinfo.vehicleid}, {read_concurrency, true}, {write_concurrency, true}]),
-    ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
-    mslog:loginfo("Tables are initialized."),
+    create_tables(),
+
+    create_directories(),
     
-    case file:make_dir(?DEF_LOG_PATH ++ "/log") of
-        ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
-        {error, DirEx0} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
-    end,
-    case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
-        ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
-        {error, DirEx1} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
-    end,
-    case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
-        ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
-        {error, DirEx2} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
-    end,
-    case file:make_dir(?DEF_LOG_PATH ++ "/media") of
-        ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
-        {error, DirEx3} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
-    end,
-    case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
-        ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
-        {error, DirEx4} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
-    end,
-    mslog:loginfo("Directories are initialized."),
+    create_processes(),
     
-    ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
-    ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
-
-    EredisPid = spawn(fun() -> eredis_processor:eredis_process(ConnInfoPid) end),
-    ets:insert(msgservertable, {eredispid, EredisPid}),
-    
-    CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
-    ets:insert(msgservertable, {ccpid, CCPid}),
-                        
-    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
-    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),
-    
-    % Do we really need it?
-    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
-    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
-
-    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
-    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
-
-    VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
-    ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
-
-    VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
-    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
-
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
@@ -191,6 +129,96 @@ startserver(StartArgs) ->
             mslog:logerr("Message server fails to start : ~p", [Error]),
             {error, Error}
     end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% create_tables()
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+create_tables() ->
+    ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(vdrdbtable,   [ordered_set, public, named_table, {keypos, #vdrdbitem.authencode},  {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(vdrtable,     [ordered_set, public, named_table, {keypos, #vdritem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(mantable,     [set,         public, named_table, {keypos, #manitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(usertable,    [set,         public, named_table, {keypos, #user.id},               {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(drivertable,  [set,         public, named_table, {keypos, #driverinfo.driverid},   {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(lastpostable, [set,         public, named_table, {keypos, #lastposinfo.vehicleid}, {read_concurrency, true}, {write_concurrency, true}]),
+    ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
+    mslog:loginfo("Tables are initialized.").    
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% create_directories()
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+create_directories() ->
+    case file:make_dir(?DEF_LOG_PATH ++ "/log") of
+        ok ->
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
+        {error, DirEx0} ->
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
+    end,
+    
+    case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
+        ok ->
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
+        {error, DirEx1} ->
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
+    end,
+    
+    case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
+        ok ->
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
+        {error, DirEx2} ->
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
+    end,
+    
+    case file:make_dir(?DEF_LOG_PATH ++ "/media") of
+        ok ->
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
+        {error, DirEx3} ->
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
+    end,
+    
+    case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
+        ok ->
+            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
+        {error, DirEx4} ->
+            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
+    end,
+    
+    mslog:loginfo("Directories are initialized.").    
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% create_processes()
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+create_processes() ->
+    ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
+    ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
+    
+    EredisPid = spawn(fun() -> eredis_processor:eredis_process(ConnInfoPid) end),
+    ets:insert(msgservertable, {eredispid, EredisPid}),    
+    
+    CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
+    ets:insert(msgservertable, {ccpid, CCPid}),                        
+    
+    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
+    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),    
+    
+    % Do we really need it?
+    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
+    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
+    
+    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
+    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
+    
+    VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
+    ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
+    
+    VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
+    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
