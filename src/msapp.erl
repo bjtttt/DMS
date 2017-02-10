@@ -37,7 +37,7 @@ start(_StartType, StartArgs) ->
         Len =:= ?START_PARAM_COUN ->
             start_server(StartArgs);
         true ->
-            mslog:loginfo("Parameter count error : ~p", [Len])
+            mslog:logerror("Parameter count error : ~p", [Len])
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -74,12 +74,14 @@ start_server(StartArgs) ->
     
     create_processes(),
     
+    [{eredispid, EredisPid}] = ets:lookup(msgservertable, eredispid),
+    
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
             ets:insert(msgservertable, {suppid, SupPid}),
             mslog:loghint("DMS starts initializing data structures."),
             EredisPid ! {self(), init},
-            case receive_redis_init_msg(UseRedis, EredisPid, 0) of
+            case receive_redis_init_msg(Redis, EredisPid, 0) of
                 {error, RedisError} ->
                     stop(self()),
                     {error, "Message server fails to start : " ++ RedisError};

@@ -1,12 +1,15 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% This is the root supervisor 
+% mssup.erl 
 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -module(mssup).
 
 -behaviour(supervisor).
 
--include("../include/header.hrl").
+-include("../include/header_const.hrl").
+-include("../include/header_struct.hrl").
 
 -export([start_link/0]).
 
@@ -77,37 +80,6 @@ start_child_mon(Socket, Addr, ConnInfoPid) ->
     end.          
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
-% startchild_ret() = {ok, Child :: child()}
-%                  | {ok, Child :: child(), Info :: term()}
-%                  | {error, startchild_err()}
-% startchild_err() = already_present
-%                  | {already_started, Child :: child()}
-%                  | term()
-% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-% SEEMS TO BE OF NO USE
-% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-start_child_db(ConnInfoPid) ->
-    mslog:loginfo("mssup:start_child_db(ConnInfoPid : ~p)", [ConnInfoPid]),
-    case supervisor:start_child(ti_client_db, [ConnInfoPid]) of
-        {ok, Pid} ->
-            {ok, Pid};
-        {ok, Pid, Info} ->
-            {ok, Pid, Info};
-        {error, Reason} ->
-            case Reason of
-                already_present ->
-                    common:loghint("mssup:start_child_db(ConnInfoPid : ~p) fails : already_present", [ConnInfoPid]);
-                {already_strated, CPid} ->
-                    common:logerr("mssup:start_child_db(ConnInfoPid : ~p) fails : already_started PID : ~p", [ConnInfoPid, CPid]);
-                Msg ->
-                    common:logerr("mssup:start_child_db(ConnInfoPid : ~p) fails : ~p", [ConnInfoPid, Msg])
-            end,
-            {error, Reason}
-    end.                    
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % ok
 % {error, Error} : Error = not_found | simple_one_for_one
@@ -136,24 +108,6 @@ stop_child_mon(Pid) ->
             ok;
         {error, Reason} ->
             mslog:logerr("mssup:stop_child_mon fails(PID : ~p) : ~p", [Pid, Reason]),
-            {error, Reason}
-    end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% ok
-% {error, Error} : Error = not_found | simple_one_for_one
-% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-% SEEMS TO BE OF NO USE
-% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-stop_child_db(Pid) ->
-    mslog:loginfo("mssup:stop_child_db(PID : ~p)", [Pid]),
-    case supervisor:terminate_child(ti_client_db, Pid) of
-        ok ->
-            ok;
-        {error, Reason} ->
-            common:loginfo("mssup:stop_child_db fails(PID : ~p) : ~p", [Reason, Pid]),
             {error, Reason}
     end.
 

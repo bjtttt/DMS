@@ -13,8 +13,8 @@
          logall/2,
          loginfo/1,
          loginfo/2,
-         logimp/1,
-         logimp/2,
+         loghint/1,
+         loghint/2,
          logerr/1,
          logerr/2,
          log_vdr_statistics_info/2,
@@ -89,15 +89,8 @@ save_stored_msg_4_vdr(_VDRID, _StoredMsg, _VDRLogPid) ->
 logall(Format) ->
     do_log(Format, ?DISP_LEVEL_ALL, 0).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log maybe useful messages.
-% Parameter :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-lognone(Format) ->
-    do_log(Format, ?DISP_LEVEL_NONE, 0).
+logall(Format, Log, LogLevel) ->
+    do_log(Format, ?DISP_LEVEL_ALL, 0).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -116,7 +109,7 @@ loginfo(Format) ->
 % Parameter :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-logwarn(Format) ->
+loghint(Format) ->
     do_log(Format, ?DISP_LEVEL_WARN, 0).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -126,7 +119,7 @@ logwarn(Format) ->
 % Parameter :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-logerr(Format) ->
+loghint(Format) ->
     do_log(Format, ?DISP_LEVEL_ERR, 1).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -137,14 +130,27 @@ logerr(Format) ->
 %       DispErr     :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log(Format, CurLevel, DispErr) when is_binary(Format),
-                                       CurLevel =< ?DISP_LEVEL_ERR,
-                                       CurLevel >= ?DISP_LEVEL_ALL,
-                                       DispErr =< 1,
-                                       DispErr >= 0 ->
+do_log(Format, Level) when is_binary(Format),
+                              CurLevel =< ?DISP_LEVEL_ERR,
+                              CurLevel >= ?DISP_LEVEL_ALL ->
     try
-        [{displog, DispLog}] = ets:lookup(msgservertable, displog),
-        [{displevel, DispLevel}] = ets:lookup(msgservertable, displevel),
+        [{displog, Log}] = ets:lookup(msgservertable, displog),
+        [{displevel, LogLevel}] = ets:lookup(msgservertable, displevel),
+        
+        do_log(Format, Level, Log, LogLevel)
+    catch
+        Oper:Msg ->
+            error_logger:error_msg("do_log(Format, Level) exception : ~p : ~p", [Oper, Msg])
+    end.
+    
+do_log(Format, CurLevel, Log, LogLevel) when is_binary(Format),
+                                             CurLevel =< ?DISP_LEVEL_ERR,
+                                             CurLevel >= ?DISP_LEVEL_ALL,
+                                             Log =< 1,
+                                             Log >= 0,
+                                             LogLevel =< ?DISP_LEVEL_ERR,
+                                             LogLevel >= ?DISP_LEVEL_ALL ->
+    try
         if
             DispLevel =< CurLevel ->
                 try
@@ -159,10 +165,7 @@ do_log(Format, CurLevel, DispErr) when is_binary(Format),
                     end
                 catch
                     Oper:Msg ->
-                        if
-                            DispLog =:= 1 ->
-                                error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
-                        end
+                        error_logger:error_msg("do_log(...) exception : ~p : ~p", [Oper, Msg])
                 end
         end
     catch
