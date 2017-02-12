@@ -60,10 +60,31 @@ start(_StartType, StartArgs) ->
 start_server(StartArgs) ->
     [Log, LogLevel, Redis, HttpGps] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
-    ets:insert(msgservertable, {displog, Log}),
-    ets:insert(msgservertable, {displevel, LogLevel}),
-    ets:insert(msgservertable, {useredis, Redis}),
-    ets:insert(msgservertable, {usehttpgps, HttpGps}),
+    if
+        Log =:= 1 ->
+            ets:insert(msgservertable, {displog, true});
+        true ->
+            ets:insert(msgservertable, {displog, false})
+    end,
+    if
+        LogLevel < ?DISP_LEVEL_ALL orelse LogLevel > ?DISP_LEVEL_ERR ->
+            ets:insert(msgservertable, {displog, false}),
+            ets:insert(msgservertable, {displevel, DISP_LOG_ERR});
+        true ->
+            ets:insert(msgservertable, {displevel, LogLevel})
+    end,
+    if
+        Redis =:= 1 ->
+            ets:insert(msgservertable, {useredis, true});
+        true ->
+            ets:insert(msgservertable, {useredis, false})
+    end,
+    if
+        HttpGps =:= 1 ->
+            ets:insert(msgservertable, {usehttpgps, true}),
+        true ->
+            ets:insert(msgservertable, {usehttpgps, false})
+    end,
     ets:insert(msgservertable, {redispid, undefined}),
     ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),

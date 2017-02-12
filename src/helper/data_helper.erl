@@ -83,33 +83,6 @@ combine_strings(List, Sep) when is_list(List),
 combine_strings(_List, _Sep) ->
     [].
     
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-%       Check whether a list is a pure string list or not.
-%       Condition is each character should be within [32, 126]
-% Parameter :
-%       String  :
-% Return    :
-%       true    : is a string
-%       false   : not a string
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-is_string(String) when is_list(String) ->
-    Fun = fun(X) -> 
-            if 
-                X < 32 -> 
-                    false; 
-                X > 126 -> 
-                    false;
-                true -> 
-                    true
-            end
-    end,
-    lists:all(Fun, String);
-is_string(_String) ->
-    false.
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %   true only when all strings in List are NOT an empty one
