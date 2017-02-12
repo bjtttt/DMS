@@ -9,18 +9,18 @@
 -include("../include/header_const.hrl").
 -include("../include/header_struct.hrl").
 
--export([logall/1,
-         logall/2,
-         loginfo/1,
-         loginfo/2,
-         loghint/1,
-         loghint/2,
-         logerr/1,
-         logerr/2,
-         log_vdr_statistics_info/2,
-         log_vdr_info/3,
-         log_vdr_info/4,
-         save_msg_4_vdr/3]).
+-export([log_all/1,
+         log_all/3,
+         log_info/1,
+         log_info/3,
+         log_hint/1,
+         log_hint/3,
+         log_err/1,
+         log_err/3]).
+%         log_vdr_statistics_info/2,
+%         log_vdr_info/3,
+%         log_vdr_info/4,
+%         save_msg_4_vdr/3]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -84,75 +84,222 @@ save_stored_msg_4_vdr(_VDRID, _StoredMsg, _VDRLogPid) ->
 % Description:
 %   Log all messages.
 % Parameter :
-%
+%       Data        : binary/list to be displayed
+% Return :
+%       ok
+% 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-logall(Format) ->
-    do_log(Format, ?DISP_LEVEL_ALL, 0).
-
-logall(Format, Log, LogLevel) ->
-    do_log(Format, ?DISP_LEVEL_ALL, 0).
+log_all(Data) when is_binary(Data) ->
+    do_log(binary_to_list(Data), ?DISP_LEVEL_ALL);
+log_all(Data) when is_list(Data) ->
+    do_log(Data, ?DISP_LEVEL_ALL);
+log_all(_Data) ->
+    ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
-%   Log common messages.
+%   Log all messages.
 % Parameter :
+%       Data        : binary/list to be displayed
+%       Log         : YES/NO, should be the system defined display log enabled
+%       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_IMP/DISP_LEVEL_ERR, should be the system defined display log level
+% Return :
+%       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loginfo(Format) ->
-    do_log(Format, ?DISP_LEVEL_INFO, 0).
+log_all(Data, Log, LogLevel) when is_binary(Data),
+                                 Log >= ?NO,
+                                 Log =< ?YES,
+                                 LogLevel >= ?DISP_LEVEL_ALL,
+                                 LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_ALL, Log, LogLevel);
+log_all(Data, Log, LogLevel) when is_list(Data),
+                                 Log >= ?NO,
+                                 Log =< ?YES,
+                                 LogLevel >= ?DISP_LEVEL_ALL,
+                                 LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_ALL, Log, LogLevel);
+log_all(_Data, _Log, _LogLevel) ->
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log information messages.
+% Parameter :
+%       Data        : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_info(Data) when is_binary(Data) ->
+    do_log(Data, ?DISP_LEVEL_INFO);
+log_info(Data) when is_list(Data) ->
+    do_log(Data, ?DISP_LEVEL_INFO);
+log_info(_Data) ->
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log information messages.
+% Parameter :
+%       Data        :
+%       Log         : YES/NO, should be the system defined display log enabled
+%       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_IMP/DISP_LEVEL_ERR, should be the system defined display log level
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_info(Data, Log, LogLevel) when is_binary(Data),
+                                  Log >= ?NO,
+                                  Log =< ?YES,
+                                  LogLevel >= ?DISP_LEVEL_ALL,
+                                  LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_INFO, Log, LogLevel);
+log_info(Data, Log, LogLevel) when is_list(Data),
+                                  Log >= ?NO,
+                                  Log =< ?YES,
+                                  LogLevel >= ?DISP_LEVEL_ALL,
+                                  LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_INFO, Log, LogLevel);
+log_info(_Data, _Log, _LogLevel) ->
+    ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
 %   Log important messages, such as some operation related messages
 % Parameter :
+%       Data        : binary/list to be displayed
+% Return :
+%       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loghint(Format) ->
-    do_log(Format, ?DISP_LEVEL_WARN, 0).
+log_hint(Data) when is_binary(Data) ->
+    do_log(Data, ?DISP_LEVEL_IMP);
+log_hint(Data) when is_list(Data) ->
+    do_log(Data, ?DISP_LEVEL_IMP);
+log_hint(_Data) ->
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log important messages, such as some operation related messages
+% Parameter :
+%       Data        : binary/list to be displayed
+%       Log         : YES/NO, should be the system defined display log enabled
+%       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_IMP/DISP_LEVEL_ERR, should be the system defined display log level
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_hint(Data, Log, LogLevel) when is_binary(Data),
+                                  Log >= ?NO,
+                                  Log =< ?YES,
+                                  LogLevel >= ?DISP_LEVEL_ALL,
+                                  LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_IMP, Log, LogLevel);
+log_hint(Data, Log, LogLevel) when is_list(Data),
+                                  Log >= ?NO,
+                                  Log =< ?YES,
+                                  LogLevel >= ?DISP_LEVEL_ALL,
+                                  LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_IMP, Log, LogLevel);
+log_hint(_Data, _Log, _LogLevel) ->
+    ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
 %   Log errors.
 % Parameter :
+%       Data        : binary/list to be displayed
+% Return :
+%       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-loghint(Format) ->
-    do_log(Format, ?DISP_LEVEL_ERR, 1).
+log_err(Data) when is_binary(Data) ->
+    do_log(Data, ?DISP_LEVEL_ERR);
+log_err(Data) when is_list(Data) ->
+    do_log(Data, ?DISP_LEVEL_ERR);
+log_err(_Data) ->
+    ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Description:
+%   Log errors.
 % Parameter :
-%       Format      :
-%       CurLevel    : Only when current level is larger than or equal to the display level, can the message be displayed
-%       DispErr     :
+%       Data        : binary/list to be displayed
+%       Log         : YES/NO, should be the system defined display log enabled
+%       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_IMP/DISP_LEVEL_ERR, should be the system defined display log level
+% Return :
+%       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log(Format, Level) when is_binary(Format),
-                              CurLevel =< ?DISP_LEVEL_ERR,
-                              CurLevel >= ?DISP_LEVEL_ALL ->
+log_err(Data, Log, LogLevel) when is_binary(Data),
+                                  Log >= ?NO,
+                                  Log =< ?YES,
+                                  LogLevel >= ?DISP_LEVEL_ALL,
+                                  LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_ERR, Log, LogLevel);
+log_err(Data, Log, LogLevel) when is_list(Data),
+                                  Log >= ?NO,
+                                  Log =< ?YES,
+                                  LogLevel >= ?DISP_LEVEL_ALL,
+                                  LogLevel =< ?DISP_LEVEL_ERR ->
+    do_log(Data, ?DISP_LEVEL_ERR, Log, LogLevel);
+log_err(_Data, _Log, _LogLevel) ->
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description :
+%    When the system defined display log is false, the message won't be displayed.
+% Parameter :
+%       Data        :
+%       Level       : when current level is smaller than the system defined display log level, the message won't be displayed
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+do_log(Data, Level) when is_binary(Data),
+                         Level =< ?DISP_LEVEL_ERR,
+                         Level >= ?DISP_LEVEL_ALL ->
     try
         [{displog, Log}] = ets:lookup(msgservertable, displog),
         [{displevel, LogLevel}] = ets:lookup(msgservertable, displevel),
         
-        do_log(Format, Level, Log, LogLevel)
+        do_log(Data, Level, Log, LogLevel)
     catch
         Oper:Msg ->
-            error_logger:error_msg("do_log(Format, Level) exception : ~p : ~p", [Oper, Msg])
+            error_logger:error_msg("do_log(Data, Level) exception : ~p : ~p", [Oper, Msg])
+    end;
+do_log(_Data, _Level) ->
     end.
-    
-do_log(Format, CurLevel, Log, LogLevel) when is_binary(Format),
-                                             CurLevel =< ?DISP_LEVEL_ERR,
-                                             CurLevel >= ?DISP_LEVEL_ALL,
-                                             Log =< 1,
-                                             Log >= 0,
-                                             LogLevel =< ?DISP_LEVEL_ERR,
-                                             LogLevel >= ?DISP_LEVEL_ALL ->
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Parameter :
+%       Data        :
+%       Level       : when current level is smaller than the system defined display log level, the message won't be displayed
+%       Log         : should be the system defined display log
+%       LogLevel    : should be the system defined dislay log level
+%
+% When Log is false, the message won't be displayed.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+do_log(Data, Level, Log, LogLevel) when is_binary(Data),
+                                        Level =< ?DISP_LEVEL_ERR,
+                                        Level >= ?DISP_LEVEL_ALL,
+                                        Log =< 1,
+                                        Log >= 0,
+                                        LogLevel =< ?DISP_LEVEL_ERR,
+                                        LogLevel >= ?DISP_LEVEL_ALL ->
     try
         if
-            DispLevel =< CurLevel ->
+            LogLevel =< Level ->
                 try
                     if
                         DispLog =:= 1 ->
@@ -267,7 +414,8 @@ logerr(Format, Data) ->
 %       DispErr     :
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log(Format, Data, CurLevel, DispErr) when is_binary(Data),
+do_log(Format, Data, CurLevel, DispErr) when is_string(Format),
+                                             is_binary(Data),
                                              CurLevel =< ?DISP_LEVEL_ERR,
                                              CurLevel >= ?DISP_LEVEL_ALL,
                                              DispErr =< 1,
