@@ -309,7 +309,7 @@ do_log(Format, Level, Log, LogLevel) when is_binary(Format),
         do_log(binary_to_list(Format), Level, Log, LogLevel)
     catch
         Oper:Msg ->
-            error_logger:error_msg("do_log(Data, Level, Log, LogLevel) exception : ~p : ~p", [Oper, Msg])
+            error_logger:error_msg("do_log(Format - binary, Level, Log, LogLevel) exception : ~p : ~p", [Oper, Msg])
     end;
 do_log(Format, Level, Log, LogLevel) when is_list(Format),
                                           Level =< ?DISP_LEVEL_ERR,
@@ -334,7 +334,7 @@ do_log(Format, Level, Log, LogLevel) when is_list(Format),
                 end
             catch
                 Oper:Msg ->
-                    error_logger:error_msg("do_log(Data, Level, Log, LogLevel) exception : ~p : ~p", [Oper, Msg])
+                    error_logger:error_msg("do_log(Format - list, Level, Log, LogLevel) exception : ~p : ~p", [Oper, Msg])
             end
     end;
 do_log(_Format, _Level, _Log, _LogLevel) ->
@@ -352,10 +352,18 @@ do_log(_Format, _Level, _Log, _LogLevel) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_all(Format, Data) when is_binary(Data) ->
     if
-        data_helper:is_string(Format) =:= ?YES
-    do_log(Data, ?DISP_LEVEL_ALL);
+        string_helper:is_string(Format) =:= ?YES ->
+            do_log(Format, Data, ?DISP_LEVEL_ALL);
+        true ->
+            error_logger:error_msg("log_all(Format - string, Data - binary) parameter error : " ++ erlang:get_stacktrace())
+    end;
 log_all(Format, Data) when is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_ALL);
+    if
+        string_helper:is_string(Format) =:= ?YES ->
+            do_log(Format, Data, ?DISP_LEVEL_ALL);
+        true ->
+            error_logger:error_msg("log_all(Format - string, Data - binary) parameter error : " ++ erlang:get_stacktrace())
+    end;
 log_all(_Format, _Data) ->
     ok.
 
