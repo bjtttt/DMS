@@ -93,7 +93,7 @@ start_server(StartArgs) ->
 
     create_directories(),
     
-    create_processes(),
+    create_processes(Log, LogLevel),
     
     [{eredispid, EredisPid}] = ets:lookup(msgservertable, eredispid),
     
@@ -217,7 +217,10 @@ create_directories() ->
 % create_processes()
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-create_processes() ->
+create_processes(Log, LogLevel) ->
+    LogPid = spawn(fun() -> log:log_process(LogLevel, Log, LogLevel, 0, 0, 0, 0, 0, 0) end),
+    ets:insert(msgservertable, {logpid, LogPid}),
+ 
     ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
     ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
     
