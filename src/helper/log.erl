@@ -29,7 +29,7 @@
 %   MissedCount     : when Log is false
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount) ->
+log_process(LogState#logstate) ->
     receive
         {Format} ->
             if
@@ -37,21 +37,21 @@ log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, Unkn
                     case Level of
                         ?DISP_LEVEL_ALL ->
                             log_all(Format, Log, LogLevel),
-                            log_process(Level, Log, LogLevel, AllCount+1, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1});
                         ?DISP_LEVEL_INFO ->
                             log_info(Format, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount+1, WarnCount, ErrCount, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1, infocount=LogState#logstate.infocount+1});
                         ?DISP_LEVEL_INFO ->
                             log_warn(Format, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount+1, ErrCount, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1, warncount=LogState#logstate.warncount+1});
                         ?DISP_LEVEL_INFO ->
                             log_err(Format, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount+1, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1, errcount=LogState#logstate.errcount+1});
                         _ ->
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount+1, MissedCount)
+                            log_process(LogState#logstate{unknowncount=LogState#logstate.unknowncount+1)
                     end;
                 true ->
-                    log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount+1)
+                    log_process(LogState#logstate{unknowncount=LogState#logstate.missedcount+1)
            end,
         {Format, Data} ->
             if
@@ -59,33 +59,33 @@ log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, Unkn
                     case Level of
                         ?DISP_LEVEL_ALL ->
                             log_all(Format, Data, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount+1, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1});
                         ?DISP_LEVEL_INFO ->
                             log_info(Format, Data, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount+1, WarnCount, ErrCount, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1, infocount=LogState#logstate.infocount+1});
                         ?DISP_LEVEL_INFO ->
                             log_warn(Format, Data, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount+1, ErrCount, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1, warncount=LogState#logstate.warncount+1});
                         ?DISP_LEVEL_INFO ->
                             log_err(Format, Data, Log, LogLevel);
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount+1, UnknwonCount, MissedCount);
+                            log_process(LogState#logstate{allcount=LogState#logstate.allcount+1, errcount=LogState#logstate.errcount+1});
                         _ ->
-                            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount+1, MissedCount)
+                            log_process(LogState#logstate{unknowncount=LogState#logstate.unknowncount+1)
                     end;
                 true ->
                     log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount+1)
             end;
         {log, Value} ->
-            log_process(Value, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount);
+            log_process(LogState#logstate{curlevel=Value});
         {displog, Value} ->
-            log_process(Level, Value, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount);
+            log_process(LogState#logstate{logenabled=Value});
         {displevel, Value} ->
-            log_process(Level, Log, Value, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount);
+            log_process(LogState#logstate{loglevel=Value});
         reset ->
-            log_process(?DISP_LEVEL_ERR, ?NO, ?DISP_LEVEL_ERR, 0, 0, 0, 0, 0, 0);
+            log_process(NewLogState#logstate);
         {Pid, query} ->
-            Pid ! {Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount},
-            log_process(Level, Log, LogLevel, AllCount, InfoCount, WarnCount, ErrCount, UnknwonCount, MissedCount);
+            Pid ! LogState#logstate,
+            log_process(LogStatet#logstate);
         stop ->
             ok
     end.
