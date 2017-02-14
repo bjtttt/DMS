@@ -20,21 +20,24 @@
 % Description:
 %   Log process will receive all log request and log the messages.
 % Parameter :
-%       Log         : YES/NO, should be the system defined display log enabled
-%       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_WARN/DISP_LEVEL_ERR, should be the system defined display log level
+%       LogState    : struct logstate
 % Return :
 %       ok
 % Note  :
-%   UnknwonCount    : unknown display level
-%   MissedCount     : when Log is false
+%   unknowncount    : unknown display level
+%   missedcount     : when Log is false
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_process(LogState#logstate) ->
     receive
+        {all, Format} ->
+            if
+                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel  ->
+
         {Format} ->
             if
-                Log =:= ?YES ->
-                    case Level of
+                LogState#logstate.logenabled =:= ?YES ->
+                    case LogState#logstate.loglevel of
                         ?DISP_LEVEL_ALL ->
                             log_all(Format, Log, LogLevel),
                             log_process(LogState#logstate{allcount=LogState#logstate.allcount+1});
@@ -55,8 +58,8 @@ log_process(LogState#logstate) ->
            end,
         {Format, Data} ->
             if
-                Log =:= ?YES ->
-                    case Level of
+                LogState#logstate.logenabled =:= ?YES ->
+                    case LogState#logstate.loglevel of
                         ?DISP_LEVEL_ALL ->
                             log_all(Format, Data, Log, LogLevel);
                             log_process(LogState#logstate{allcount=LogState#logstate.allcount+1});
@@ -95,17 +98,97 @@ log_process(LogState#logstate) ->
 % Description:
 %   Log all messages.
 % Parameter :
+%       LogPid      :
 %       Format      : binary/list to be displayed
 % Return :
 %       ok
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_all(Format) when is_binary(Format) ->
-    do_log(Format, ?DISP_LEVEL_ALL);
-log_all(Format) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_ALL);
-log_all(_Format) ->
-    ok.
+log_all(LogPid, Format) ->
+    LogPid ! {all, Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log information messages.
+% Parameter :
+%       LogPid      :
+%       Format      : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_info(LogPid, Format) ->
+    LogPid ! {info, Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log warning messages, such as some operation related messages
+% Parameter :
+%       LogPid      :
+%       Format      : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_warn(LogPid, Format) ->
+    LogPid ! {Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log errors.
+% Parameter :
+%       LogPid      :
+%       Format      : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_err(LogPid, Format) ->
+    LogPid ! {Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log all messages.
+% Parameter :
+%       LogPid      :
+%       Format + Data   : binary/list to be displayed
+% Return :
+%       ok
+% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_all(Format, Data) ->
+    LogPid ! {Format, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log information messages.
+% Parameter :
+%       LogPid      :
+%       Format + Data   : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_info(LogPid, Format, Data) ->
+    LogPid ! {Format, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Description:
+%   Log warning messages, such as some operation related messages
+% Parameter :
+%       Data        : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_warn(LogPid, Format, Data) when is_binary(Data) ->
+    LogPid ! {Format, Data}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -130,23 +213,6 @@ log_all(Format, Log, LogLevel) when is_list(Format),
                                     LogLevel =< ?DISP_LEVEL_ERR ->
     do_log(Format, ?DISP_LEVEL_ALL, Log, LogLevel);
 log_all(_Format, _Log, _LogLevel) ->
-    ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log information messages.
-% Parameter :
-%       Format      : binary/list to be displayed
-% Return :
-%       ok
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_info(Format) when is_binary(Format) ->
-    do_log(Format, ?DISP_LEVEL_INFO);
-log_info(Format) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_INFO);
-log_info(_Format) ->
     ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -180,23 +246,6 @@ log_info(_Format, _Log, _LogLevel) ->
 %   Log warning messages, such as some operation related messages
 % Parameter :
 %       Format      : binary/list to be displayed
-% Return :
-%       ok
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_warn(Format) when is_binaryFormat ->
-    do_log(Format, ?DISP_LEVEL_WARN);
-log_warn(Format) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_WARN);
-log_warn(_Format) ->
-    ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log warning messages, such as some operation related messages
-% Parameter :
-%       Format      : binary/list to be displayed
 %       Log         : boolean true/false, should be the system defined display log enabled
 %       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_WARN/DISP_LEVEL_ERR, should be the system defined display log level
 % Return :
@@ -214,23 +263,6 @@ log_warn(Format, Log, LogLevel) when is_list(Format),
                                      LogLevel =< ?DISP_LEVEL_ERR ->
     do_log(Format, ?DISP_LEVEL_WARN, Log, LogLevel);
 log_warn(_Format, _Log, _LogLevel) ->
-    ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log errors.
-% Parameter :
-%       Format      : binary/list to be displayed
-% Return :
-%       ok
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_err(Format) when is_binary(Format) ->
-    do_log(Format, ?DISP_LEVEL_ERR);
-log_err(Format) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_ERR);
-log_err(_Format) ->
     ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -357,33 +389,6 @@ do_log(_Format, _Level, _Log, _LogLevel) ->
 %   Log all messages.
 % Parameter :
 %       Format + Data   : binary/list to be displayed
-% Return :
-%       ok
-% 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_all(Format, Data) when is_binary(Data) ->
-    if
-        string_helper:is_string(Format) =:= ?YES ->
-            do_log(Format, Data, ?DISP_LEVEL_ALL);
-        true ->
-            error_logger:error_msg("log_all(Format - string, Data - binary) parameter error : " ++ erlang:get_stacktrace())
-    end;
-log_all(Format, Data) when is_list(Data) ->
-    if
-        string_helper:is_string(Format) =:= ?YES ->
-            do_log(Format, Data, ?DISP_LEVEL_ALL);
-        true ->
-            error_logger:error_msg("log_all(Format - string, Data - binary) parameter error : " ++ erlang:get_stacktrace())
-    end;
-log_all(_Format, _Data) ->
-    error_logger:error_msg("do_log(Format, Data) parameter error : " ++ erlang:get_stacktrace()).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log all messages.
-% Parameter :
-%       Format + Data   : binary/list to be displayed
 %       Log         : boolean true/false, should be the system defined display log enabled
 %       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_WARN/DISP_LEVEL_ERR, should be the system defined display log level
 % Return :
@@ -416,23 +421,6 @@ log_all(_Format, _Data, _Log, _LogLevel) ->
 %   Log information messages.
 % Parameter :
 %       Data        : binary/list to be displayed
-% Return :
-%       ok
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_info(Data) when is_binary(Data) ->
-    do_log(Data, ?DISP_LEVEL_INFO);
-log_info(Data) when is_list(Data) ->
-    do_log(Data, ?DISP_LEVEL_INFO);
-log_info(_Data) ->
-    ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log information messages.
-% Parameter :
-%       Data        : binary/list to be displayed
 %       Log         : YES/NO, should be the system defined display log enabled
 %       LogLevel    : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_WARN/DISP_LEVEL_ERR, should be the system defined display log level
 % Return :
@@ -452,23 +440,6 @@ log_info(Data, Log, LogLevel) when is_list(Data),
                                    LogLevel =< ?DISP_LEVEL_ERR ->
     do_log(Data, ?DISP_LEVEL_INFO, Log, LogLevel);
 log_info(_Data, _Log, _LogLevel) ->
-    ok.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description:
-%   Log warning messages, such as some operation related messages
-% Parameter :
-%       Data        : binary/list to be displayed
-% Return :
-%       ok
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_warn(Data) when is_binary(Data) ->
-    do_log(Data, ?DISP_LEVEL_WARN);
-log_warn(Data) when is_list(Data) ->
-    do_log(Data, ?DISP_LEVEL_WARN);
-log_warn(_Data) ->
     ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
