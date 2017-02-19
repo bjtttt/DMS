@@ -6,7 +6,7 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--define(START_PARAM_COUN,   4).
+-define(START_PARAM_COUN,   3).
 
 -define(DISP_LEVEL_INFO,    0).         % Information
 -define(DISP_LEVEL_WARN,    1).         % Warning

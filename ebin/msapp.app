@@ -30,5 +30,5 @@
                 vdr_server]},
     {registered, [mssup]},
     {applications, [kernel, sasl, stdlib]},
-    {mod, {msapp, [0, 3, 1, 0]}}
+    {mod, {msapp, [1, 1, 0]}}
  ]}.

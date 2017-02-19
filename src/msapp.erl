@@ -8,7 +8,8 @@
 
 -behaviour(application).
 
--include("../include/header_const.hrl").
+% This header file is included in "../include/header_struct.hrl"
+%-include("../include/header_const.hrl").
 -include("../include/header_struct.hrl").
 
 -export([start/2, stop/1]).
@@ -26,11 +27,11 @@
 %application:start(sasl).
 %application:start(msapp).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % start(_StartType, StartArgs)
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start(_StartType, StartArgs) ->
     Len = length(StartArgs),
     if
@@ -49,8 +50,8 @@ start(_StartType, StartArgs) ->
 %
 %-----------------------------------------------------------------------------------------
 %
-%   Log         :
-%   LogLevel    :
+%   Log         : 1     -> enable log
+%                       -> disable log
 %   Redis       : 1     -> use Redis
 %                 0     -> doesn't use Redis, for the capacity test
 %   HttpGps     : 1     -> use HttpGps server
@@ -58,21 +59,8 @@ start(_StartType, StartArgs) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_server(StartArgs) ->
-    [Log, LogLevel, Redis, HttpGps] = StartArgs,
+    [Log, Redis, HttpGps] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
-    if
-        Log =:= 1 ->
-            ets:insert(msgservertable, {displog, true});
-        true ->
-            ets:insert(msgservertable, {displog, false})
-    end,
-    if
-        LogLevel < ?DISP_LEVEL_ALL orelse LogLevel > ?DISP_LEVEL_ERR ->
-            ets:insert(msgservertable, {displog, false}),
-            ets:insert(msgservertable, {displevel, DISP_LOG_ERR});
-        true ->
-            ets:insert(msgservertable, {displevel, LogLevel})
-    end,
     if
         Redis =:= 1 ->
             ets:insert(msgservertable, {useredis, true});
@@ -93,9 +81,12 @@ start_server(StartArgs) ->
 
     create_directories(),
     
-    create_processes(Log, LogLevel),
-    
-    [{eredispid, EredisPid}] = ets:lookup(msgservertable, eredispid),
+    if
+        Log =:= 1 ->
+            {LogPid, EredisPid} = create_processes(?YES);
+        true ->
+            {LogPid, EredisPid} = create_processes(?NO)
+    end,
     
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
@@ -217,8 +208,8 @@ create_directories() ->
 % create_processes()
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-create_processes(Log, LogLevel) ->
-    LogPid = spawn(fun() -> log:log_process(LogLevel, Log, LogLevel, 0, 0, 0, 0, 0, 0) end),
+create_processes(Log)) ->
+    LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
     ets:insert(msgservertable, {logpid, LogPid}),
  
     ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
@@ -244,7 +235,9 @@ create_processes(Log, LogLevel) ->
     ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
     
     VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
-    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}).
+    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
+
+    {LogPid, EredisPid}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
