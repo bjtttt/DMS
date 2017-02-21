@@ -81,12 +81,9 @@ start_server(StartArgs) ->
 
     create_directories(),
     
-    if
-        Log =:= 1 ->
-            {LogPid, EredisPid} = create_processes(?YES);
-        true ->
-            {LogPid, EredisPid} = create_processes(?NO)
-    end,
+    create_processes(Log, Redis),
+
+    {eredispid, EredisPid} = ets:lookup(msgservertable, eredispid);
     
     case supervisor:start_link(mssup, []) of
         {ok, SupPid} ->
@@ -144,11 +141,13 @@ start_server(StartArgs) ->
             {error, Error}
     end.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % create_tables()
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Parameters
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 create_tables() ->
     ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(vdrdbtable,   [ordered_set, public, named_table, {keypos, #vdrdbitem.authencode},  {read_concurrency, true}, {write_concurrency, true}]),
@@ -160,11 +159,11 @@ create_tables() ->
     ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
     mslog:loginfo("Tables are initialized.").    
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % create_directories()
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 create_directories() ->
     case file:make_dir(?DEF_LOG_PATH ++ "/log") of
         ok ->
@@ -203,20 +202,33 @@ create_directories() ->
     
     mslog:loginfo("Directories are initialized.").    
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_processes()
+% create_processes(Log, Redis, HttpGps)
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-create_processes(Log)) ->
+% Parameters :
+%       Log     :   Log level when start
+%       Redis   :   Whether to use redis or not
+%                   1       -   use redis
+%                   others  -   not use redis
+% Return    :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+create_processes(Log, Redis) ->
     LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
     ets:insert(msgservertable, {logpid, LogPid}),
  
     ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
     ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
     
-    EredisPid = spawn(fun() -> eredis_processor:eredis_process(ConnInfoPid) end),
-    ets:insert(msgservertable, {eredispid, EredisPid}),    
+    if
+        Redis =:= 1->
+            EredisPid = spawn(fun() -> eredis_processor:eredis_process(ConnInfoPid) end),
+            ets:insert(msgservertable, {eredispid, EredisPid});
+        true ->
+            ets:insert(msgservertable, {eredispid, undefined})
+    end,
     
     CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
     ets:insert(msgservertable, {ccpid, CCPid}),                        
@@ -235,9 +247,7 @@ create_processes(Log)) ->
     ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
     
     VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
-    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}),
-
-    {LogPid, EredisPid}.
+    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
