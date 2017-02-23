@@ -17,8 +17,6 @@
 
 -define(REDIS_INIT_TIME, 20).
 
--define(DEF_LOG_PATH, "/tmp").
-
 -define(CONN_STAT_TEST,                 0).     %
 -define(CONN_STAT_CONN,                 1).     % Count for VDR connections
 -define(CONN_STAT_DISC_CHAR,            2).     % Disconnection count due to invalid characters in the message from VDR to the gateway

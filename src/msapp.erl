@@ -77,11 +77,14 @@ start_server(StartArgs) ->
     ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),
     
-    create_tables(),
+    LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
+    ets:insert(msgservertable, {logpid, LogPid}),
 
-    create_directories(),
+    create_tables(LogPid),
+
+    create_directories(LogPid),
     
-    create_processes(Log, Redis),
+    create_processes(Redis),
 
     {eredispid, EredisPid} = ets:lookup(msgservertable, eredispid);
     
@@ -143,12 +146,15 @@ start_server(StartArgs) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_tables()
+% create_tables(LogPid)
 %
-% Parameters
+% Parameters    :
+%       LogPid  :
+% Return    :
+%       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-create_tables() ->
+create_tables(LogPid) ->
     ets:new(alarmtable,   [bag,         public, named_table, {keypos, #alarmitem.vehicleid},   {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(vdrdbtable,   [ordered_set, public, named_table, {keypos, #vdrdbitem.authencode},  {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(vdrtable,     [ordered_set, public, named_table, {keypos, #vdritem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
@@ -157,54 +163,59 @@ create_tables() ->
     ets:new(drivertable,  [set,         public, named_table, {keypos, #driverinfo.driverid},   {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(lastpostable, [set,         public, named_table, {keypos, #lastposinfo.vehicleid}, {read_concurrency, true}, {write_concurrency, true}]),
     ets:new(montable,     [set,         public, named_table, {keypos, #monitem.socket},        {read_concurrency, true}, {write_concurrency, true}]),
-    mslog:loginfo("Tables are initialized.").    
+    log:log_info(LogPid, "Tables are initialized.").    
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_directories()
+% create_directories(LogPid)
+%
+% Parameters    :
+%       LogPid  :
+% Return    :
+%       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-create_directories() ->
+create_directories(LogPid) ->
     case file:make_dir(?DEF_LOG_PATH ++ "/log") of
         ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
-        {error, DirEx0} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", DirEx0])
+            log:log_info(LogPid, "Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log"]);
+        {error, Reason0} ->
+            log:log_err(LogPid, "Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log", Reason0])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
         ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
-        {error, DirEx1} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", DirEx1])
+            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
+        {error, Reason1} ->
+            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", Reason1])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
         ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
-        {error, DirEx2} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", DirEx2])
+            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
+        {error, Reason2} ->
+            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", Reason2])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/media") of
         ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
-        {error, DirEx3} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", DirEx3])
+            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
+        {error, Reason3} ->
+            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", Reason3])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
         ok ->
-            mslog:loghint("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
-        {error, DirEx4} ->
-            mslog:logerr("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", DirEx4])
+            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
+        {error, Reason4} ->
+            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", Reason4])
     end,
     
     mslog:loginfo("Directories are initialized.").    
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_processes(Log, Redis, HttpGps)
+% create_processes(Log, Redis)
 %
 % Parameters :
 %       Log     :   Log level when start
@@ -216,9 +227,6 @@ create_directories() ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 create_processes(Log, Redis) ->
-    LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
-    ets:insert(msgservertable, {logpid, LogPid}),
- 
     ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
     ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
     

@@ -14,3 +14,5 @@
 
 -define(YES,                true).
 -define(NO,                 false).
+
+-define(DEF_LOG_PATH,       "/tmp").
