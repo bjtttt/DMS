@@ -10,7 +10,7 @@
 
 -record(logstate, 
         {
-            loglevel=?DISP_LEVEL_FORCE,
+            loglevel=?DISP_LEVEL_ERR,
             infocount=0,
             warncount=0,
             errcount=0,

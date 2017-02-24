@@ -6,8 +6,8 @@
 
 -module(log).
 
--include("../include/header_const.hrl").
--include("../include/header_struct.hrl").
+%-include("../include/header_const.hrl").
+-include("../../include/header_struct.hrl").
 
 -export([log_process_dummy/1,
          log_info/2,
@@ -16,6 +16,8 @@
          log_force_info/3,
          log_warn/2,
          log_warn/3,
+         log_force_warn/2,
+         log_force_warn/3,
          log_err/2,
          log_err/3,
          log_force_err/2,
@@ -37,75 +39,76 @@
 %   missedcount     : when Log is false
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_process(LogState#logstate) ->
+log_process(LogState) ->
     receive
         {info, Format} ->
             if
-                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel >= ?DISP_LEVEL_INFO  ->
-                    do_log_info(Format);
+                LogState#logstate.loglevel >= ?DISP_LEVEL_INFO ->
+                    do_log_info(Format, LogState);
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
         {info, Format, Data} ->
             if
-                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel >= ?DISP_LEVEL_INFO  ->
-                    do_log_info(Format, Data);
+                LogState#logstate.loglevel >= ?DISP_LEVEL_INFO ->
+                    do_log_info(Format, Data, LogState);
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
         {warn, Format} ->
             if
-                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel >= ?DISP_LEVEL_WARN  ->
-                    do_log_warn(Format);
+                LogState#logstate.loglevel >= ?DISP_LEVEL_WARN ->
+                    do_log_warn(Format, LogState);
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
         {warn, Format, Data} ->
             if
-                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel >= ?DISP_LEVEL_WARN  ->
-                    do_log_warn(Format, Data);
+                LogState#logstate.loglevel >= ?DISP_LEVEL_WARN ->
+                    do_log_warn(Format, Data, LogState);
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
         {err, Format} ->
             if
-                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel >= ?DISP_LEVEL_ERR  ->
-                    do_log_err(Format);
+                LogState#logstate.loglevel >= ?DISP_LEVEL_ERR ->
+                    do_log_err(Format, LogState);
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
         {err, Format, Data} ->
             if
-                LogState#logstate.logenabled =:= ?YES and LogState#logstate.loglevel >= ?DISP_LEVEL_ERR  ->
-                    do_log_err(Format, Data);
+                LogState#logstate.loglevel >= ?DISP_LEVEL_ERR ->
+                    do_log_err(Format, Data, LogState);
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
         {forceinfo, Format} ->
-            do_log_info(Format);
+            do_log(Format, ?DISP_LEVEL_INFO, LogState);
         {forceinfo, Format, Data} ->
-            do_log_info(Format, Data);
+            do_log(Format, Data, ?DISP_LEVEL_INFO, LogState);
+        {forcewarn, Format} ->
+            do_log(Format, ?DISP_LEVEL_WARN, LogState);
+        {forcewarn, Format, Data} ->
+            do_log(Format, Data, ?DISP_LEVEL_WARN, LogState);
         {forceerr, Format} ->
-            do_log_err(Format);
+            do_log(Format, ?DISP_LEVEL_INFO, LogState);
         {forceerr, Format, Data} ->
-            do_log_err(Format, Data);
-        {log, Value} ->
-            log_process(LogState#logstate{curlevel=Value});
-        {displog, Value} ->
-            log_process(LogState#logstate{logenabled=Value});
+            do_log(Format, Data, ?DISP_LEVEL_INFO, LogState);
         {displevel, Value} ->
             log_process(LogState#logstate{loglevel=Value});
         reset ->
-            log_process(NewLogState#logstate);
+            NewLogState = #logstate{},
+            log_process(NewLogState);
         {Pid, query} ->
-            Pid ! LogState#logstate,
-            log_process(LogStatet#logstate);
+            Pid ! LogState,
+            log_process(LogState);
         pause ->
-            log_process_dummy(LogState#logstate);
+            log_process_dummy(LogState);
         stop ->
             ok;
         Unknown ->
-            do_log_err("Log unknown log message : " ++ Unknown),
+            do_log_err("Log unknown log message : ~p", [Unknown]),
             log_process_dummy(LogState#logstate{unknowncount=LogState#logstate.unknowncount+1})
     end.
 
@@ -125,10 +128,10 @@ log_process(LogState#logstate) ->
 %   dummycount  : dummy log request count
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-log_process_dummy(LogState#logstate) ->
+log_process_dummy(LogState) ->
     receive
         start ->
-            log_process(LogState#logstate);
+            log_process(LogState);
         stop ->
             ok;
         _ ->
@@ -232,6 +235,38 @@ log_warn(LogPid, Format, Data) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   public
+% Description:
+%   Log warning messages regardless of whether Log is enabled or not.
+% Parameter:
+%   LogPid      :
+%   Format      : binary/list to be displayed
+% Return:
+%   ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_force_warn(LogPid, Format) ->
+    LogPid ! {forcewarn, Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
+% Description:
+%   Log warning messages regardless of whether Log is enabled or not.
+% Parameter:
+%   LogPid          :
+%   Format + Data   : binary/list to be displayed
+% Return:
+%   ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_force_warn(LogPid, Format, Data) ->
+    LogPid ! {forcewarn, Format, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
 % Description:
 %   Log errors regardless of whether Log is enabled or not.
 % Parameter :
@@ -303,11 +338,11 @@ log_force_err(LogPid, Format, Data) ->
 %   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log_info(Format, LogState#logstate) when is_binary(Format) ->
-    do_log(Format, ?DISP_LEVEL_INFO, LogState#logstate);
-do_log_info(Format, LogState#logstate) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_INFO, LogState#logstate);
-do_log_info(_Format, LogState#logstate) ->
+do_log_info(Format, LogState) when is_binary(Format) ->
+    do_log(Format, ?DISP_LEVEL_INFO, LogState);
+do_log_info(Format, LogState) when is_list(Format) ->
+    do_log(Format, ?DISP_LEVEL_INFO, LogState);
+do_log_info(_Format, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -323,19 +358,19 @@ do_log_info(_Format, LogState#logstate) ->
 %   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log_info(Format, Data, LogState#logstate) when is_binary(Format),
-                                                  is_binary(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState#logstate);
-do_log_info(Format, Data, LogState#logstate) when is_binary(Format),
-                                                  is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState#logstate);
-do_log_info(Format, Data, LogState#logstate) when is_list(Format),
-                                                  is_binary(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState#logstate);
-do_log_info(Format, Data, LogState#logstate) when is_list(Format),
-                                                  is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState#logstate);
-do_log_info(_Format, _Data, LogState#logstate) ->
+do_log_info(Format, Data, LogState) when is_binary(Format),
+                                         is_binary(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState);
+do_log_info(Format, Data, LogState) when is_binary(Format),
+                                         is_list(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState);
+do_log_info(Format, Data, LogState) when is_list(Format),
+                                         is_binary(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState);
+do_log_info(Format, Data, LogState) when is_list(Format),
+                                         is_list(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_INFO, LogState);
+do_log_info(_Format, _Data, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -351,11 +386,11 @@ do_log_info(_Format, _Data, LogState#logstate) ->
 %   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log_warn(Format, LogState#logstate) when is_binary(Format) ->
-    do_log(Format, ?DISP_LEVEL_WARN, LogState#logstate);
-do_log_warn(Format, LogState#logstate) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_WARN, LogState#logstate);
-do_log_warn(_Format, LogState#logstate) ->
+do_log_warn(Format, LogState) when is_binary(Format) ->
+    do_log(Format, ?DISP_LEVEL_WARN, LogState);
+do_log_warn(Format, LogState) when is_list(Format) ->
+    do_log(Format, ?DISP_LEVEL_WARN, LogState);
+do_log_warn(_Format, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -371,19 +406,19 @@ do_log_warn(_Format, LogState#logstate) ->
 %   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log_warn(Format, Data, LogState#logstate) when is_binary(Format),
-                                                  is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState#logstate);
-do_log_warn(Format, Data, LogState#logstate) when is_binary(Format),
-                                                  is_binary(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState#logstate);
-do_log_warn(Format, Data, LogState#logstate) when is_list(Format),
-                                                  is_binary(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState#logstate);
-do_log_warn(Format, Data, LogState#logstate) when is_list(Format),
-                                                  is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState#logstate);
-do_log_warn(_Format, _Data, LogState#logstate) ->
+do_log_warn(Format, Data, LogState) when is_binary(Format),
+                                         is_list(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState);
+do_log_warn(Format, Data, LogState) when is_binary(Format),
+                                         is_binary(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState);
+do_log_warn(Format, Data, LogState) when is_list(Format),
+                                         is_binary(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState);
+do_log_warn(Format, Data, LogState) when is_list(Format),
+                                         is_list(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_WARN, LogState);
+do_log_warn(_Format, _Data, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -397,11 +432,11 @@ do_log_warn(_Format, _Data, LogState#logstate) ->
 %       LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log_err(Format, LogState#logstate) when is_binary(Format) ->
-    do_log(Format, ?DISP_LEVEL_ERR, LogState#logstate);
-do_log_err(Format, LogState#logstate) when is_list(Format) ->
-    do_log(Format, ?DISP_LEVEL_ERR, LogState#logstate);
-do_log_err(_Format, LogState#logstate) ->
+do_log_err(Format, LogState) when is_binary(Format) ->
+    do_log(Format, ?DISP_LEVEL_ERR, LogState);
+do_log_err(Format, LogState) when is_list(Format) ->
+    do_log(Format, ?DISP_LEVEL_ERR, LogState);
+do_log_err(_Format, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -415,43 +450,40 @@ do_log_err(_Format, LogState#logstate) ->
 %       LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log_err(Format, Data, LogState#logstate) when is_binary(Format),
-                                                 is_binary(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState#logstate);
-do_log_err(Format, Data, LogState#logstate) when is_binary(Format),
-                                                 is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState#logstate);
-do_log_err(Format, Data, LogState#logstate) when is_list(Format),
-                                                 is_binary(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState#logstate);
-do_log_err(Format, Data, LogState#logstate) when is_list(Format),
-                                                 is_list(Data) ->
-    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState#logstate);
-do_log_err(_Format, _Data, LogState#logstate) ->
+do_log_err(Format, Data, LogState) when is_binary(Format),
+                                        is_binary(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState);
+do_log_err(Format, Data, LogState) when is_binary(Format),
+                                        is_list(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState);
+do_log_err(Format, Data, LogState) when is_list(Format),
+                                        is_binary(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState);
+do_log_err(Format, Data, LogState) when is_list(Format),
+                                        is_list(Data) ->
+    do_log(Format, Data, ?DISP_LEVEL_ERR, LogState);
+do_log_err(_Format, _Data, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% Description :
-%    Display the messages.
-%    When the system defined display log enabled, which is LogState#logstate.logenabled, is NO, the message won't be displayed.
-%    When Level is smaller than the system defined display log level, which is LogState#logstate.loglevel, the message won't be displayed
-%    This method should not be called except log_info/log_warn/log_err
-% Parameter :
-%       Format              : binary/list to be displayed
-%       Level               : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_IMP/DISP_LEVEL_ERR
-%       LogState#logstate   :
-% Return :
-%       LogState#logstate
+% Description:
+%   Display the messages.
+% Parameter:
+%   Format              : binary/list to be displayed
+%   Level               : DISP_LEVEL_INFO/DISP_LEVEL_WARN/DISP_LEVEL_ERR, used to call error_logger:info_msg/warning_msg/error_msg
+%   LogState#logstate   :
+% Return:
+%   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log(Format, Level, LogState#logstate) when is_binary(Format),
-                                              Level >= ?DISP_LEVEL_INFO,
-                                              Level =< ?DISP_LEVEL_ERR ->
+do_log(Format, Level, LogState) when is_binary(Format),
+                                     Level >= ?DISP_LEVEL_INFO,
+                                     Level =< ?DISP_LEVEL_ERR ->
     try
-        do_log(binary_to_list(Format), Level),
+        do_log(binary_to_list(Format), Level, LogState),
         case Level of
-            ?DISP_LOG_INFO ->
+            ?DISP_LEVEL_INFO ->
                 LogState#logstate{infocount=LogState#logstate.infocount+1};
             ?DISP_LEVEL_WARN ->
                 LogState#logstate{infocount=LogState#logstate.warncount+1};
@@ -463,12 +495,12 @@ do_log(Format, Level, LogState#logstate) when is_binary(Format),
             error_logger:error_msg("do_log(Format - binary, LogState#logstate) exception : ~p : ~p", [Oper, Msg]),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
-do_log(Format, Level, LogState#logstate) when is_list(Format),
-                                              Level >= ?DISP_LEVEL_INFO,
-                                              Level =< ?DISP_LEVEL_ERR ->
+do_log(Format, Level, LogState) when is_list(Format),
+                                     Level >= ?DISP_LEVEL_INFO,
+                                     Level =< ?DISP_LEVEL_ERR ->
     try
         case Level of
-            ?DISP_LOG_INFO ->
+            ?DISP_LEVEL_INFO ->
                 error_logger:info_msg(Format),
                 LogState#logstate{infocount=LogState#logstate.infocount+1};
             ?DISP_LEVEL_WARN ->
@@ -483,32 +515,29 @@ do_log(Format, Level, LogState#logstate) when is_list(Format),
             error_logger:error_msg("do_log(Format - list, LogState#logstate) exception : ~p : ~p", [Oper, Msg]),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
-do_log(_Format, _Level) ->
+do_log(_Format, _Level, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description :
 %    Display the messages.
-%    When the system defined display log enabled, which is LogState#logstate.logenabled, is NO, the message won't be displayed.
-%    When Level is smaller than the system defined display log level, which is LogState#logstate.loglevel, the message won't be displayed
-%    This method should not be called except log_info/log_warn/log_err
 % Parameter :
 %       Format + Data       : binary/list to be displayed
-%       Level               : DISP_LEVEL_ALL/DISP_LEVEL_INFO/DISP_LEVEL_IMP/DISP_LEVEL_ERR
+%       Level               : DISP_LEVEL_INFO/DISP_LEVEL_WARN/DISP_LEVEL_ERR, used to call error_logger:info_msg/warning_msg/error_msg
 %       LogState#logstate   :
 % Return :
 %       LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-do_log(Format, Data, Level, LogState#logstate) when is_binary(Format),
-                                                    is_binary(Data),
-                                                    Level >= ?DISP_LEVEL_INFO,
-                                                    Level =< ?DISP_LEVEL_ERR ->
+do_log(Format, Data, Level, LogState) when is_binary(Format),
+                                           is_binary(Data),
+                                           Level >= ?DISP_LEVEL_INFO,
+                                           Level =< ?DISP_LEVEL_ERR ->
     try
         do_log(binary_to_list(Format), binary_to_list(Data), Level),
         case Level of
-            ?DISP_LOG_INFO ->
+            ?DISP_LEVEL_INFO ->
                 LogState#logstate{infocount=LogState#logstate.infocount+1};
             ?DISP_LEVEL_WARN ->
                 LogState#logstate{infocount=LogState#logstate.warncount+1};
@@ -520,14 +549,14 @@ do_log(Format, Data, Level, LogState#logstate) when is_binary(Format),
             error_logger:error_msg("do_log(Format - binary, Data - binary, LogState#logstate) exception : ~p : ~p", [Oper, Msg]),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
-do_log(Format, Data, Level, LogState#logstate) when is_list(Format),
-                                                    is_binary(Data),
-                                                    Level >= ?DISP_LEVEL_INFO,
-                                                    Level =< ?DISP_LEVEL_ERR ->
+do_log(Format, Data, Level, LogState) when is_list(Format),
+                                           is_binary(Data),
+                                           Level >= ?DISP_LEVEL_INFO,
+                                           Level =< ?DISP_LEVEL_ERR ->
     try
         do_log(Format, binary_to_list(Data), Level),
         case Level of
-            ?DISP_LOG_INFO ->
+            ?DISP_LEVEL_INFO ->
                 LogState#logstate{infocount=LogState#logstate.infocount+1};
             ?DISP_LEVEL_WARN ->
                 LogState#logstate{infocount=LogState#logstate.warncount+1};
@@ -539,14 +568,14 @@ do_log(Format, Data, Level, LogState#logstate) when is_list(Format),
             error_logger:error_msg("do_log(Format - list, Data - binary, LogState#logstate) exception : ~p : ~p", [Oper, Msg]),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
-do_log(Format, Data, Level, LogState#logstate) when is_binary(Format),
-                                                    is_list(Data),
-                                                    Level >= ?DISP_LEVEL_INFO,
-                                                    Level =< ?DISP_LEVEL_ERR ->
+do_log(Format, Data, Level, LogState) when is_binary(Format),
+                                           is_list(Data),
+                                           Level >= ?DISP_LEVEL_INFO,
+                                           Level =< ?DISP_LEVEL_ERR ->
     try
         do_log(binary_to_list(Format), Data, Level),
         case Level of
-            ?DISP_LOG_INFO ->
+            ?DISP_LEVEL_INFO ->
                 LogState#logstate{infocount=LogState#logstate.infocount+1};
             ?DISP_LEVEL_WARN ->
                 LogState#logstate{infocount=LogState#logstate.warncount+1};
@@ -558,13 +587,13 @@ do_log(Format, Data, Level, LogState#logstate) when is_binary(Format),
             error_logger:error_msg("do_log(Format - binary, Data - list, LogState#logstate) exception : ~p : ~p", [Oper, Msg]),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
-do_log(Format, Data, Level, LogState#logstate) when is_list(Format),
-                                                    is_list(Data),
-                                                    Level >= ?DISP_LEVEL_INFO,
-                                                    Level =< ?DISP_LEVEL_ERR ->
+do_log(Format, Data, Level, LogState) when is_list(Format),  
+                                           is_list(Data),
+                                           Level >= ?DISP_LEVEL_INFO,
+                                           Level =< ?DISP_LEVEL_ERR ->
     try
         case Level of
-            ?DISP_LOG_INFO ->
+            ?DISP_LEVEL_INFO ->
                 error_logger:info_msg(Format, Data),
                 LogState#logstate{infocount=LogState#logstate.infocount+1};
             ?DISP_LEVEL_WARN ->
@@ -579,5 +608,5 @@ do_log(Format, Data, Level, LogState#logstate) when is_list(Format),
             error_logger:error_msg("do_log(Format - list, Data - list, LogState#logstate) exception : ~p : ~p", [Oper, Msg]),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
-do_log(_Format, _Data, _Level, LogState#logstate) ->
+do_log(_Format, _Data, _Level, LogState) ->
     LogState#logstate{formatcount=LogState#logstate.formatcount+1}.

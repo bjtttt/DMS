@@ -63,10 +63,10 @@ start_server(StartArgs) ->
     [Log, Redis, HttpGps] = StartArgs,
 
     % Log process needs to be created first seperatedly.
-    LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
+    LogPid = spawn(fun() -> log:log_process(#logstate{logenabled=Log}) end),
     ets:insert(msgservertable, {logpid, LogPid}),
 
-    log:log_force_info(LogPid, "Log")
+    log:log_force_info(LogPid, "Log process () is created.")
     
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
     if

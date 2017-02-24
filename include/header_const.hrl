@@ -11,9 +11,10 @@
 -define(DISP_LEVEL_INFO,    0).         % Information
 -define(DISP_LEVEL_WARN,    1).         % Warning
 -define(DISP_LEVEL_ERR,     2).         % Error
-%-define(DISP_LEVEL_FORCE,   3).         % Force
 
 -define(YES,                true).
 -define(NO,                 false).
 
 -define(DEF_LOG_PATH,       "/tmp").
+
+-define(WS2VDRFREQ,         10).        % Need investigation
