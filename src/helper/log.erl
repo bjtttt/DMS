@@ -9,23 +9,29 @@
 -include("../include/header_const.hrl").
 -include("../include/header_struct.hrl").
 
--export([log_process/1,
+-export([log_process_dummy/1,
          log_info/2,
          log_info/3,
+         log_force_info/2,
+         log_force_info/3,
          log_warn/2,
          log_warn/3,
          log_err/2,
-         log_err/3]).
+         log_err/3,
+         log_force_err/2,
+         log_force_err/3]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   private
 % Description:
 %   Log process will receive all log request and log the messages.
-% Parameter :
-%       LogState#logstate   : struct logstate
-% Return :
-%       ok
-% Note  :
+% Parameter:
+%   LogState#logstate   : struct logstate
+% Return:
+%   ok
+% Note:
 %   unknowncount    : unknown display level
 %   missedcount     : when Log is false
 % 
@@ -74,6 +80,14 @@ log_process(LogState#logstate) ->
                 true ->
                     log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
             end;
+        {forceinfo, Format} ->
+            do_log_info(Format);
+        {forceinfo, Format, Data} ->
+            do_log_info(Format, Data);
+        {forceerr, Format} ->
+            do_log_err(Format);
+        {forceerr, Format, Data} ->
+            do_log_err(Format, Data);
         {log, Value} ->
             log_process(LogState#logstate{curlevel=Value});
         {displog, Value} ->
@@ -85,18 +99,52 @@ log_process(LogState#logstate) ->
         {Pid, query} ->
             Pid ! LogState#logstate,
             log_process(LogStatet#logstate);
+        pause ->
+            log_process_dummy(LogState#logstate);
         stop ->
-            ok
+            ok;
+        Unknown ->
+            do_log_err("Log unknown log message : " ++ Unknown),
+            log_process_dummy(LogState#logstate{unknowncount=LogState#logstate.unknowncount+1})
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   public
+% Description:
+%   Log process dummy will receive all log request but doesn't do any log operation.
+%   Each log request will be taken as a dummy log request and increase dummycount by 1.
+%   When receive
+% Parameter:
+%   LogState#logstate   : struct logstate
+% Return:
+%   ok
+% Note:
+%   dummycount  : dummy log request count
+% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_process_dummy(LogState#logstate) ->
+    receive
+        _ ->
+            log_process_dummy(LogState#logstate{dummycount=LogState#logstate.dummycount+1});
+        start ->
+            log_process(LogState#logstate);
+        stop ->
+            ok
+    end.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
 % Description:
 %   Log information messages.
-% Parameter :
+% Parameter:
 %       LogPid      :
 %       Format      : binary/list to be displayed
-% Return :
+% Return:
 %       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -105,17 +153,51 @@ log_info(LogPid, Format) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   public
 % Description:
 %   Log information messages.
 % Parameter :
-%       LogPid          :
-%       Format + Data   : binary/list to be displayed
+%   LogPid          :
+%   Format + Data   : binary/list to be displayed
 % Return :
-%       ok
+%   ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_info(LogPid, Format, Data) ->
     LogPid ! {info, Format, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
+% Description:
+%   Log information messages regardless of whether Log is enabled or not.
+% Parameter:
+%   LogPid      :
+%   Format      : binary/list to be displayed
+% Return:
+%   ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_force_info(LogPid, Format) ->
+    LogPid ! {forceinfo, Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
+% Description:
+%   Log information messages regardless of whether Log is enabled or not.
+% Parameter:
+%   LogPid          :
+%   Format + Data   : binary/list to be displayed
+% Return:
+%   ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_force_info(LogPid, Format, Data) ->
+    LogPid ! {forceinfo, Format, Data}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -133,6 +215,8 @@ log_warn(LogPid, Format) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   public
 % Description:
 %   Log warning messages, such as some operation related messages
 % Parameter :
@@ -148,7 +232,7 @@ log_warn(LogPid, Format, Data) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
-%   Log errors.
+%   Log errors regardless of whether Log is enabled or not.
 % Parameter :
 %       LogPid      :
 %       Format      : binary/list to be displayed
@@ -161,6 +245,8 @@ log_err(LogPid, Format) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   public
 % Description:
 %   Log warning messages, such as some operation related messages
 % Parameter :
@@ -176,12 +262,44 @@ log_err(LogPid, Format, Data) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
-%   Log information messages.
+%   Log errors regardless of whether Log is enabled or not.
 % Parameter :
-%       Format              : binary/list to be displayed
-%       LogState#logstate   :
+%       LogPid      :
+%       Format      : binary/list to be displayed
 % Return :
-%       LogState#logstate
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_force_err(LogPid, Format) ->
+    LogPid ! {forceerr, Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
+% Description:
+%   Log warning messages, such as some operation related messages
+% Parameter :
+%       LogPid          :
+%       Format + Data   : binary/list to be displayed
+% Return :
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_force_err(LogPid, Format, Data) ->
+    LogPid ! {forceerr, Format, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   private
+% Description:
+%   Log information messages.
+% Parameter:
+%   Format              : binary/list to be displayed
+%   LogState#logstate   :
+% Return:
+%   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_log_info(Format, LogState#logstate) when is_binary(Format) ->
@@ -189,17 +307,19 @@ do_log_info(Format, LogState#logstate) when is_binary(Format) ->
 do_log_info(Format, LogState#logstate) when is_list(Format) ->
     do_log(Format, ?DISP_LEVEL_INFO, LogState#logstate);
 do_log_info(_Format, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   private
 % Description:
 %   Log information messages.
-% Parameter :
-%       Format + Data       : binary/list to be displayed
-%       LogState#logstate   :
-% Return :
-%       LogState#logstate
+% Parameter:
+%   Format + Data       : binary/list to be displayed
+%   LogState#logstate   :
+% Return:
+%   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_log_info(Format, Data, LogState#logstate) when is_binary(Format),
@@ -215,17 +335,19 @@ do_log_info(Format, Data, LogState#logstate) when is_list(Format),
                                                   is_list(Data) ->
     do_log(Format, Data, ?DISP_LEVEL_INFO, LogState#logstate);
 do_log_info(_Format, _Data, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   private
 % Description:
 %   Log warning messages, such as some operation related messages
-% Parameter :
-%       Format              : binary/list to be displayed
-%       LogState#logstate   :
-% Return :
-%       LogState#logstate
+% Parameter:
+%   Format              : binary/list to be displayed
+%   LogState#logstate   :
+% Return:
+%   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_log_warn(Format, LogState#logstate) when is_binary(Format) ->
@@ -233,17 +355,19 @@ do_log_warn(Format, LogState#logstate) when is_binary(Format) ->
 do_log_warn(Format, LogState#logstate) when is_list(Format) ->
     do_log(Format, ?DISP_LEVEL_WARN, LogState#logstate);
 do_log_warn(_Format, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
+% Property:
+%   private
 % Description:
 %   Log warning messages, such as some operation related messages
-% Parameter :
-%       Format              : binary/list to be displayed
-%       LogState#logstate   :
-% Return :
-%       LogState#logstate
+% Parameter:
+%   Format              : binary/list to be displayed
+%   LogState#logstate   :
+% Return:
+%   LogState#logstate
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 do_log_warn(Format, Data, LogState#logstate) when is_binary(Format),
@@ -259,7 +383,7 @@ do_log_warn(Format, Data, LogState#logstate) when is_list(Format),
                                                   is_list(Data) ->
     do_log(Format, Data, ?DISP_LEVEL_WARN, LogState#logstate);
 do_log_warn(_Format, _Data, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -277,7 +401,7 @@ do_log_err(Format, LogState#logstate) when is_binary(Format) ->
 do_log_err(Format, LogState#logstate) when is_list(Format) ->
     do_log(Format, ?DISP_LEVEL_ERR, LogState#logstate);
 do_log_err(_Format, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -303,7 +427,7 @@ do_log_err(Format, Data, LogState#logstate) when is_list(Format),
                                                  is_list(Data) ->
     do_log(Format, Data, ?DISP_LEVEL_ERR, LogState#logstate);
 do_log_err(_Format, _Data, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -359,7 +483,7 @@ do_log(Format, Level, LogState#logstate) when is_list(Format),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
 do_log(_Format, _Level) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -455,4 +579,4 @@ do_log(Format, Data, Level, LogState#logstate) when is_list(Format),
             LogState#logstate{expcount=LogState#logstate.expcount+1}
     end;
 do_log(_Format, _Data, _Level, LogState#logstate) ->
-    LogState#logstate{unknowncount=LogState#logstate.unknowncount+1}.
+    LogState#logstate{formatcount=LogState#logstate.formatcount+1}.

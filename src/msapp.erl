@@ -41,12 +41,13 @@ start(_StartType, StartArgs) ->
             mslog:logerror("Parameter count error : ~p", [Len])
     end.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % start_server(StartArgs)
 %
 % Parameters:
 %   StartArgs   :   [Log, LogLevel, Redis, HttpGps]
+% Return    :
 %
 %-----------------------------------------------------------------------------------------
 %
@@ -57,8 +58,12 @@ start(_StartType, StartArgs) ->
 %   HttpGps     : 1     -> use HttpGps server
 %                 0     -> doesn't use HttpGps server
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start_server(StartArgs) ->
+    % Log process needs to be created first seperatedly.
+    LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
+    ets:insert(msgservertable, {logpid, LogPid}),
+
     [Log, Redis, HttpGps] = StartArgs,
     ets:new(msgservertable, [set, public, named_table, {keypos, 1}, {read_concurrency, true}, {write_concurrency, true}]),
     if
@@ -77,9 +82,6 @@ start_server(StartArgs) ->
     ets:insert(msgservertable, {redisoperationpid, undefined}),
     ets:insert(msgservertable, {apppid, self()}),
     
-    LogPid = spawn(fun() -> log:log_process(LogState#logstate{LogState#logstate.logenabled=Log}) end),
-    ets:insert(msgservertable, {logpid, LogPid}),
-
     create_tables(LogPid),
 
     create_directories(LogPid),

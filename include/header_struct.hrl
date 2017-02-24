@@ -10,14 +10,15 @@
 
 -record(logstate, 
         {
-            logenabled=?YES,
-            loglevel=?DISP_LEVEL_ERR,
+            loglevel=?DISP_LEVEL_FORCE,
             infocount=0,
             warncount=0,
             errcount=0,
             expcount=0,
+            formatcount=0,
             unknowncount=0,
-            missedcount=0
+            missedcount=0,
+            dummycount=0
         }).
 
 -record(vdritem, 
