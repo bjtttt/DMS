@@ -27,6 +27,7 @@
 %   private
 % Description:
 %   Log process will receive all log request and log the messages.
+%   When receiving pause, will turn to log_process_dummy
 % Parameter:
 %   LogState#logstate   : struct logstate
 % Return:
@@ -115,7 +116,7 @@ log_process(LogState#logstate) ->
 % Description:
 %   Log process dummy will receive all log request but doesn't do any log operation.
 %   Each log request will be taken as a dummy log request and increase dummycount by 1.
-%   When receive
+%   When receiving start, will turn to log_process
 % Parameter:
 %   LogState#logstate   : struct logstate
 % Return:
@@ -126,12 +127,12 @@ log_process(LogState#logstate) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_process_dummy(LogState#logstate) ->
     receive
-        _ ->
-            log_process_dummy(LogState#logstate{dummycount=LogState#logstate.dummycount+1});
         start ->
             log_process(LogState#logstate);
         stop ->
-            ok
+            ok;
+        _ ->
+            log_process_dummy(LogState#logstate{dummycount=LogState#logstate.dummycount+1})
     end.
 
 
