@@ -6,7 +6,6 @@
 
 -module(log).
 
-%-include("../include/header_const.hrl").
 -include("../../include/header_struct.hrl").
 
 -export([log_process_dummy/1,
@@ -104,11 +103,12 @@ log_process(LogState) ->
             Pid ! LogState,
             log_process(LogState);
         pause ->
+            do_log("Entering no log state.", ?DISP_LEVEL_WARN, LogState);
             log_process_dummy(LogState);
         stop ->
+            do_log("Exiting log process.", ?DISP_LEVEL_WARN, LogState),
             ok;
         Unknown ->
-            do_log_err("Log unknown log message : ~p", [Unknown]),
             log_process_dummy(LogState#logstate{unknowncount=LogState#logstate.unknowncount+1})
     end.
 
@@ -131,8 +131,10 @@ log_process(LogState) ->
 log_process_dummy(LogState) ->
     receive
         start ->
+            do_log("Entering log state.", ?DISP_LEVEL_WARN, LogState);
             log_process(LogState);
         stop ->
+            do_log("Exiting log process.", ?DISP_LEVEL_WARN, LogState),
             ok;
         _ ->
             log_process_dummy(LogState#logstate{dummycount=LogState#logstate.dummycount+1})

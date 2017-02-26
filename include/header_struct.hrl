@@ -38,7 +38,7 @@
             lastlat=0.0,
             lastlon=0.0,
             pid=undefined,
-            dboperid=undefined,            % db operation process
+            dboperid=undefined,         % db operation process
             addr=undefined, 
             acttime=undefined, 
             timeout=undefined,
@@ -50,7 +50,7 @@
             msg=[], 
             req=[],
             msgws2vdrflownum=?WS2VDRFREQ,
-            msgws2vdr=[],            % [{MsgID, WSFlowIdx}, ...] only one item for one MsgID
+            msgws2vdr=[],               % [{MsgID, WSFlowIdx}, ...] only one item for one MsgID
             ccpid=undefined,
             msgpackages={-1, []},
             tel=0,
@@ -66,3 +66,71 @@
             vdronlinepid=undefined,
             logpid=undefined
         }).
+
+-record(alarmitem, 
+        {
+            vehicleid=undefined,        % VehicleID
+            type=undefined,             % Type
+            time=undefined              % Time
+        }).
+
+-record(vdrdbitem, 
+        {
+            authencode=undefined,       % VDRAuthenCode
+            vdrid=undefined,            % VDRID
+            vdrserialno=undefined,      % VDRSerialNo
+            vehiclecode=undefined,      % VehicleCode
+            vehicleid=undefined,        % VehicleID
+            driverid=undefined          % DriverID
+        }).
+
+-record(manitem, 
+        {
+            socket=undefined,
+            pid=undefined,
+            manpid=undefined,
+            addr=undefined,
+            timeout=undefined
+        }).
+
+%
+% There is only one super user, name is super, password is super.
+% 
+-record(user, 
+        {
+            id=undefined,
+            name=undefined,
+            level=undefined,
+            ip=undefined,
+            time=undefined
+        }).
+
+-record(driverinfo,
+        {
+            driverid=undefined,
+            licno=undefined,
+            certcode=undefined,
+            vdrauthcode=undefined
+        }).
+
+-record(lastposinfo,
+        {
+            vehicleid=undefined,
+            longitude=0.0,
+            latitude=0.0
+        }).
+
+-record(monitem,
+        {
+            socket=undefined,
+            pid=undefined,
+            addr=undefined,
+            timeout=undefined,
+            dbpid=undefined,
+            wspid=undefined,
+            driverpid=undefined,
+            vdrlogpid=undefined,
+            vdronlinepid=undefined,
+            conninfopid=undefined
+        }).
+

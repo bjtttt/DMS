@@ -29,7 +29,13 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% start(_StartType, StartArgs)
+% Description:
+%
+% Parameter:
+%       _StartType  :
+%       StartArgs   :
+% Return:
+%       ok.
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 start(_StartType, StartArgs) ->
@@ -43,11 +49,12 @@ start(_StartType, StartArgs) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% start_server(StartArgs)
+% Description:
 %
-% Parameters:
-%   StartArgs   :   [Log, LogLevel, Redis, HttpGps]
-% Return    :
+% Parameter:
+%       StartArgs   :   [Log, Redis, HttpGps]
+% Return:
+%       ok.
 %
 %-----------------------------------------------------------------------------------------
 %
@@ -151,11 +158,11 @@ start_server(StartArgs) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_tables(LogPid)
+% Description:
 %
-% Parameters    :
+% Parameter:
 %       LogPid  :
-% Return    :
+% Return:
 %       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -172,11 +179,11 @@ create_tables(LogPid) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_directories(LogPid)
+% Description:
 %
-% Parameters    :
+% Parameters:
 %       LogPid  :
-% Return    :
+% Return:
 %       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -190,44 +197,44 @@ create_directories(LogPid) ->
     
     case file:make_dir(?DEF_LOG_PATH ++ "/log/vdr") of
         ok ->
-            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
+            log:log_info(LogPid, "Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/vdr"]);
         {error, Reason1} ->
-            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", Reason1])
+            log:log_err(LogPid, "Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/vdr", Reason1])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/log/redis") of
         ok ->
-            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
+            log:log_info(LogPid, "Successfully create directory ~p", [?DEF_LOG_PATH ++ "/log/redis"]);
         {error, Reason2} ->
-            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", Reason2])
+            log:log_err(LogPid, "Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/log/redis", Reason2])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/media") of
         ok ->
-            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
+            log:log_info(LogPid, "Successfully create directory ~p", [?DEF_LOG_PATH ++ "/media"]);
         {error, Reason3} ->
-            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", Reason3])
+            log:log_err(LogPid, "Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/media", Reason3])
     end,
     
     case file:make_dir(?DEF_LOG_PATH ++ "/upgrade") of
         ok ->
-            log:log_info("Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
+            log:log_info(LogPid, "Successfully create directory ~p", [?DEF_LOG_PATH ++ "/upgrade"]);
         {error, Reason4} ->
-            log:log_err("Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", Reason4])
+            log:log_err(LogPid, "Cannot create directory ~p : ~p", [?DEF_LOG_PATH ++ "/upgrade", Reason4])
     end,
     
-    mslog:loginfo("Directories are initialized.").    
+    log:loginfo(LogPid, "Directories are initialized.").    
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% create_processes(Log, Redis)
+% Description:
 %
-% Parameters :
+% Parameters:
 %       Log     :   Log level when start
 %       Redis   :   Whether to use redis or not
 %                   1       -   use redis
 %                   others  -   not use redis
-% Return    :
+% Return:
 %       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -301,47 +308,6 @@ init_last_pos_table() ->
     ets:delete_all_objects(lastpostable),
     mslog:loghint("Init last position table.").
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-vdr_log_process(VDRList) ->
-    receive
-        stop ->
-            mslog:loghint("VDR log process stops.");
-        reset ->
-            vdr_log_process([]);
-        {set, VID} ->
-            VDRExclList = [C || C <- VDRList, C =/= VID],
-            NewVDRList = lists:merge([VDRExclList, [VID]]),
-            vdr_log_process(NewVDRList);
-        {clear, VID} ->
-            VDRExclList = [C || C <- VDRList, C =/= VID],
-            vdr_log_process(VDRExclList);
-        {Pid, count} ->
-            Count = length(VDRList),
-            Pid ! {Pid, Count},
-            vdr_log_process(VDRList);
-        {save, VDRID, FromVDR, MsgBin, DateTime} ->
-            VDRInclList = [C || C <- VDRList, C =:= VDRID],
-            Len = length(VDRInclList),
-            if
-                Len =:= 1 ->
-                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime),
-                    vdr_log_process(VDRList);
-                Len > 1 ->
-                    VDRExclList = [C || C <- VDRList, C =/= VDRID],
-                    NewVDRList = lists:merge([VDRExclList, [VDRID]]),
-                    save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime),
-                    vdr_log_process(NewVDRList);
-                true ->
-                    vdr_log_process(VDRList)
-            end;
-        _ ->
-            mslog:loghint("VDR log process : unknown message"),
-            vdr_log_process(VDRList)
-    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
