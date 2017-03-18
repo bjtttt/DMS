@@ -44,7 +44,32 @@ log_process(LogState) ->
     receive
         {addspecial, Number} ->
             Special = LogState#logstate.special,
-            NewSpecial = Special
+            NewSpecial = Special bor Number,
+            log_process(LogState#logstate{special=NewSpecial});
+        {removespecial, Number} ->
+            Special = LogState#logstate.special,
+            NewSpecial = Special bxor Number,
+            log_process(LogState#logstate{special=NewSpecial});
+        resetspecial ->
+            log_process(LogState#logstate{special=?DISP_SPEC_NONE});
+        {special, Number, Format} ->
+            SpecialNumbers = LogState#logstate.special,
+            CheckSpecial = SpecialNumbers band Number,
+            if
+                CheckSpecial =:= Number ->
+                    do_log_info(Format, LogState);
+                true ->
+                    log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
+            end;
+        {special, Number, Format, Data} ->
+            SpecialNumbers = LogState#logstate.special,
+            CheckSpecial = SpecialNumbers band Number,
+            if
+                CheckSpecial =:= Number ->
+                    do_log_info(Format, Data, LogState);
+                true ->
+                    log_process(LogState#logstate{missedcount=LogState#logstate.missedcount+1})
+            end;
         {info, Format} ->
             if
                 LogState#logstate.loglevel >= ?DISP_LEVEL_INFO ->

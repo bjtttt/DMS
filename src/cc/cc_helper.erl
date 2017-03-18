@@ -6,7 +6,7 @@
 
 -module(cc_helper).
 
--include("../include/header_struct.hrl").
+-include("../../include/header_struct.hrl").
 
 -export([convert_utf8_to_gbk/1,
          convert_utf8_to_gbk/2,
@@ -132,31 +132,31 @@ code_convertor_process(LogPid) ->
         {Pid, gbk2utf8, Source} ->
             try
                 Destination = ccprocessor:to_utf8(Source),
-                log:log_info("code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination]),
+                log:log_special(LogPid, "code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination]),
                 Pid ! Destination
             catch
                 _:Reason ->
-                    log:log_err("code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason]),
+                    log:log_err(LogPid, "code_convertor_process : source ~p, dest UTF8 Exception : ~p", [Source, Reason]),
                     Pid ! Source
             end,
-            code_convertor_process();
+            code_convertor_process(LogPid);
         {Pid, utf82gbk, Source} ->
             try
-                Destination = ccprocessor:to_gbk(Source),
-                log:log_info("code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination]),
+                Destination = cc_processor:to_gbk(Source),
+                log:log_special(LogPid, "code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination]),
                 Pid ! Destination
             catch
                 _:Reason ->
-                    log:logerr("code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason]),
+                    log:log_err(LogPid, "code_convertor_process : source ~p, dest GBK Exception : ~p", [Source, Reason]),
                     Pid ! Source
             end,
-            code_convertor_process();
+            code_convertor_process(LogPid);
         {Pid, Msg} ->
-            log:loghint("code_convertor_process : unknown request : ~p", [Msg]),
+            log:log_err(LogPid, "code_convertor_process : unknown request : ~p", [Msg]),
             Pid ! Msg,
-            code_convertor_process();
+            code_convertor_process(LogPid);
         _ ->
-            log:loghint("code_convertor_process : unknown message"),
-            code_convertor_process()
+            log:log_err(LogPid, "code_convertor_process : unknown message"),
+            code_convertor_process(LogPid)
     end.
 
