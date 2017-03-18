@@ -18,8 +18,6 @@
 %
 % Timeout definitions
 %
--define(TIMEOUT_CC_INIT,    5000). 
--define(TIMEOUT_CC_REQ,    10000). 
 
 -define(SUP_WAIT_INTVL_MS, 5000).
 

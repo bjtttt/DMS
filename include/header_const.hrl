@@ -8,10 +8,6 @@
 
 -define(START_PARAM_COUN,   3).
 
--define(DISP_LEVEL_INFO,    0).         % Information
--define(DISP_LEVEL_WARN,    1).         % Warning
--define(DISP_LEVEL_ERR,     2).         % Error
-
 -define(YES,                true).
 -define(NO,                 false).
 
@@ -22,6 +18,23 @@
 
 -define(WS2VDRFREQ,         10).        % Need investigation
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Display level definitions
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-define(DISP_LEVEL_INFO,    0).         % Information
+-define(DISP_LEVEL_WARN,    1).         % Warning
+-define(DISP_LEVEL_ERR,     2).         % Error
+
+-define(DISP_SPEC_NONE,     0).         % CC
+-define(DISP_SPEC_CC,       1).         % CC
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Connection information definitions
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -define(CONN_STAT_TEST,                 0).     %
 -define(CONN_STAT_CONN,                 1).     % Count for VDR connections
 -define(CONN_STAT_DISC_CHAR,            2).     % Disconnection count due to invalid characters in the message from VDR to the gateway
@@ -55,3 +68,11 @@
 -define(CONN_STAT_PARSE_INDEX_SMALL,   30).     % Parsing: current package index < 1 for multiple messages
 -define(CONN_STAT_PARSE_INDEX_LARGE,   31).     % Parsing: current package index > total package number for multiple messages
 -define(CONN_STAT_INFO_COUNT,          32).     % Count for connection status information, should be of the last one and for an indication of the length
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Timeout definitions
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-define(TIMEOUT_CC_INIT,    5000).      % 5s
+-define(TIMEOUT_CC_REQ,    10000).      % 10s

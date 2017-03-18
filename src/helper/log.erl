@@ -9,6 +9,8 @@
 -include("../../include/header_struct.hrl").
 
 -export([log_process_dummy/1,
+         log_special/3,
+         log_special/4,
          log_info/2,
          log_info/3,
          log_force_info/2,
@@ -40,6 +42,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 log_process(LogState) ->
     receive
+        {addspecial, Number} ->
+            Special = LogState#logstate.special,
+            NewSpecial = Special
         {info, Format} ->
             if
                 LogState#logstate.loglevel >= ?DISP_LEVEL_INFO ->
@@ -140,6 +145,40 @@ log_process_dummy(LogState) ->
             log_process_dummy(LogState#logstate{dummycount=LogState#logstate.dummycount+1})
     end.
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
+% Description:
+%   Log special messages.
+% Parameter:
+%       LogPid      :
+%       Special     :
+%       Format      : binary/list to be displayed
+% Return:
+%       ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_special(LogPid, Special, Format) ->
+    LogPid ! {special, Special, Format}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Property:
+%   public
+% Description:
+%   Log special messages.
+% Parameter :
+%   LogPid          :
+%       Special     :
+%   Format + Data   : binary/list to be displayed
+% Return :
+%   ok
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+log_special(LogPid, Special, Format, Data) ->
+    LogPid ! {special, Special, Format, Data}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

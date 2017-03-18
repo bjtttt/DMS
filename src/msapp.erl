@@ -96,7 +96,7 @@ start_server(StartArgs) ->
 
     create_directories(LogPid),
     
-    create_processes(Redis),
+    create_processes(LogPid, Redis),
 
     {eredispid, EredisPid} = ets:lookup(msgservertable, eredispid);
     
@@ -115,37 +115,22 @@ start_server(StartArgs) ->
                             EredisPid ! ok,
                             mslog:loghint("Message server force redis process to be switched to ok.")
                     end,
-                    case init_vdr_db_table() of
-                        {error, Msg0} ->
-                            {error, Msg0};
-                        ok ->
-                            case init_last_pos_table() of
-                                {error, Msg1} ->
-                                    {error, Msg1};
-                                ok ->
-                                    case init_driver_table() of
-                                        {error, Msg2} ->
-                                            {error, Msg2};
-                                        ok ->
-                                            CCPid ! {self(), create},
-                                            receive
-                                                created ->
-                                                    mslog:loghint("Code convertor table is created"),
-                                                    HttpGpsPid = spawn(fun() -> httpgps:http_gps_deamon(?DEF_HTTPGPS_SERVER, uninit, 0, 0, 0, 0, 1) end),
-                                                    ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
-                                                    mslog:loghint("HTTP GPS process PID is ~p", [HttpGpsPid]),
-                                                    case UseHttpGps of
-                                                        1 ->
-                                                            HttpGpsPid ! init;
-                                                        _ ->
-                                                            ok
-                                                    end,
-                                                    {ok, self()}
-                                                after ?TIMEOUT_CC_INIT ->
-                                                    {error, "ERROR : code convertor table is timeout"}
-                                            end
-                                    end
-                            end
+                    CCPid ! {self(), create},
+                    receive
+                        created ->
+                            mslog:loghint("Code convertor table is created"),
+                            HttpGpsPid = spawn(fun() -> httpgps:http_gps_deamon(?DEF_HTTPGPS_SERVER, uninit, 0, 0, 0, 0, 1) end),
+                            ets:insert(msgservertable, {httpgpspid, HttpGpsPid}),
+                            mslog:loghint("HTTP GPS process PID is ~p", [HttpGpsPid]),
+                            case UseHttpGps of
+                                1 ->
+                                    HttpGpsPid ! init;
+                                _ ->
+                                    ok
+                            end,
+                            {ok, self()}
+                        after ?TIMEOUT_CC_INIT ->
+                            {error, "ERROR : code convertor table is timeout"}
                     end
             end;
         ignore ->
@@ -230,7 +215,7 @@ create_directories(LogPid) ->
 % Description:
 %
 % Parameters:
-%       Log     :   Log level when start
+%       LogPid  :   
 %       Redis   :   Whether to use redis or not
 %                   1       -   use redis
 %                   others  -   not use redis
@@ -238,7 +223,7 @@ create_directories(LogPid) ->
 %       ok
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-create_processes(Log, Redis) ->
+create_processes(LogPid, Redis) ->
     ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
     ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
     
@@ -250,7 +235,7 @@ create_processes(Log, Redis) ->
             ets:insert(msgservertable, {eredispid, undefined})
     end,
     
-    CCPid = spawn(fun() -> cc_helper:code_convertor_process() end),
+    CCPid = spawn(fun() -> cc_helper:code_convertor_process(LogPid) end),
     ets:insert(msgservertable, {ccpid, CCPid}),                        
     
     VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
@@ -268,46 +253,6 @@ create_processes(Log, Redis) ->
     
     VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
     ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Not Implemented Yet!
-%
-% Description :
-%        Initialize VDR table from Redis.
-%        Should we also use local cache here even if we use Redis? 
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init_vdr_db_table() ->
-    ets:delete_all_objects(vdrdbtable),
-    mslog:loghint("Init vdr db table.").
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Not Implemented Yet!
-%
-% Description :
-%        Initialize driver table from Redis.
-%        Should we also use local cache here even if we use Redis? 
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init_driver_table() ->
-    ets:delete_all_objects(drivertable),
-    mslog:loghint("Init driver table.").
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Not Implemented Yet!
-%
-% Description :
-%        Initialize last position table from Redis.
-%        Should we also use local cache here even if we use Redis? 
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-init_last_pos_table() ->
-    ets:delete_all_objects(lastpostable),
-    mslog:loghint("Init last position table.").
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

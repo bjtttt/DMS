@@ -11,6 +11,7 @@
 -record(logstate, 
         {
             loglevel=?DISP_LEVEL_ERR,
+            special=?DISP_SPEC_NONE,
             infocount=0,
             warncount=0,
             errcount=0,
