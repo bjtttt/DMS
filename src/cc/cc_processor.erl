@@ -1,28 +1,31 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % cc_processor.erl
 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -module(cc_processor).
 
 -include("../../include/header_struct.hrl").
 
--export([to_utf8/1, to_utf8/2, to_gbk/1, to_gbk/2, init_code_table/0]).
+-export([to_utf8/2, to_utf8/3, to_gbk/2, to_gbk/3, init_code_table/0]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
 %
 % Parameter:
-%       Src     :
+%   LogPid  :
+%   Src     :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-to_utf8(Str) when is_list(Str) ->
-	to_utf8(Str, "gbk");
+to_utf8(LogPid, Str) when is_list(Str) ->
+	to_utf8(LogPid, Str, "gbk");
 to_utf8(Str) when is_binary(Str) ->
 	BinStr = binary_to_list(Str),
-	to_utf8(BinStr, "gbk");
-to_utf8(Str) ->
+	to_utf8(LogPid, BinStr, "gbk");
+to_utf8(_LogPid, Str) ->
 	Str.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -30,51 +33,56 @@ to_utf8(Str) ->
 % Description:
 %
 % Parameter:
-%       Src         :
-%       Encoding    :
+%   LogPid  :
+%   Src         :
+%   Encoding    :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-to_utf8(Str, Encoding) when Encoding == "gbk" ->
-     if is_binary(Str) ->    
-			gbk_to_utf8(binary_to_list(Str), [], 1, 1);
-        is_list(Str) -> 
-			gbk_to_utf8(Str, [], 1, 1);
-        true -> not_supported
-     end;
-to_utf8(Str, Encoding) when Encoding == "gb2312" ->
-     if is_binary(Str) ->    
-			gbk_to_utf8(binary_to_list(Str), [], 1, 1);
-        is_list(Str) -> 
-			gbk_to_utf8(Str, [], 1, 1);
-        true -> not_supported
-     end.
+to_utf8(LogPid, Str, Encoding) when is_binary(Str),
+                                    Encoding == "gbk" ->
+    gbk_to_utf8(LogPid, binary_to_list(Str), [], 1, 1);
+to_utf8(LogPid, Str, Encoding) when is_list(Str),
+                                    Encoding == "gbk" ->
+    gbk_to_utf8(LogPid, Str, [], 1, 1);
+to_utf8(LogPid, Str, Encoding) when is_binary(Str),
+                                    Encoding == "gb2312" ->
+    gbk_to_utf8(binary_to_list(Str), [], 1, 1);
+to_utf8(LogPid, Str, Encoding) when is_list(Str),
+                                    Encoding == "gb2312" ->
+    gbk_to_utf8(LogPid, Str, [], 1, 1);
+to_utf8(_LogPid, Str, _Encoding) ->
+    Str.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
 %
 % Parameter:
-%
+%   LogPid      :
+%   []          :
+%   U           :
+%   RowIndex    :
+%   ColIndex    :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-gbk_to_utf8([Char | S], U, RowIndex, ColIndex) when Char < 128 ->
+gbk_to_utf8(LogPid, [Char | S], U, RowIndex, ColIndex) when Char < 128 ->
     case Char of
         10 -> 
-			gbk_to_utf8(S, [Char | U], RowIndex + 1, 0);
+			gbk_to_utf8(LogPid, S, [Char | U], RowIndex + 1, 0);
         _  -> 
-			gbk_to_utf8(S, [Char | U], RowIndex, ColIndex + 1)
+			gbk_to_utf8(LogPid, S, [Char | U], RowIndex, ColIndex + 1)
     end;     
-gbk_to_utf8([A, B | S], U, RowIndex, ColIndex) ->
+gbk_to_utf8(LogPid, [A, B | S], U, RowIndex, ColIndex) ->
     case get({gbk, A, B}) of
         undefined ->
-            common:loginfo("gbk not found: ~p, ~p", [{gbk, A, B}, {index, RowIndex, ColIndex}]),
+            log:log_err(LogPid, "gbk not found: ~p, ~p", [{gbk, A, B}, {index, RowIndex, ColIndex}]),
             gbk_to_utf8(S, U, RowIndex, ColIndex + 2);
         Other ->  
 			gbk_to_utf8(S, list_append(Other, U), RowIndex, ColIndex + 2)
     end;    
-gbk_to_utf8([], U, _RowIndex, _ColIndex) ->
+gbk_to_utf8(LogPid, [], U, _RowIndex, _ColIndex) ->
      lists:reverse(U).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -82,130 +90,133 @@ gbk_to_utf8([], U, _RowIndex, _ColIndex) ->
 % Description:
 %
 % Parameter:
-%
+%   LogPid  :
+%   Str     :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-to_gbk(Str) ->
-	to_gbk(Str, "utf8").
+to_gbk(LogPid, Str) ->
+	to_gbk(LogPid, Str, "utf8").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
 %
 % Parameter:
-%
+%   LogPid      :
+%   Str         :
+%   Encoding    :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-to_gbk(Str, Encoding) when Encoding == "utf8" ->
-     if is_binary(Str) ->    
-			utf8_to_gbk(binary_to_list(Str), [], 1, 1);
-        is_list(Str) -> 
-			utf8_to_gbk(Str, [], 1, 1);
-        true -> not_supported
-     end.
+to_gbk(LogPid, Str, Encoding) when is_binary(Str),
+                                   Encoding == "utf8" ->
+    utf8_to_gbk(LogPid, binary_to_list(Str), [], 1, 1);
+to_gbk(LogPid, Str, Encoding) when is_list(Str),
+                                   Encoding == "utf8" ->
+    utf8_to_gbk(LogPid, Str, [], 1, 1);
+to_gbk(_LogPid, Str, _Encoding) ->
+    Str.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
 %
 % Parameter:
-%
+%   LogPid      :
+%   []          :
+%   U           :
+%   RowIndex    :
+%   ColIndex    :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-utf8_to_gbk([Char | S], U, RowIndex, ColIndex) when Char =/= 63,	% 1
-													Char =/= 194,	% 2
-													Char =/= 195,	% 2
-													Char =/= 196,	% 2
-													Char =/= 197,	% 2
-													Char =/= 199,	% 2
-													Char =/= 201,	% 2
-													Char =/= 203,	% 2
-													Char =/= 206,	% 2
-													Char =/= 207,	% 2
-													Char =/= 208,	% 2
-													Char =/= 226,	% 3
-													Char =/= 227,	% 3
-													Char =/= 228,	% 3
-													Char =/= 229,	% 3
-													Char =/= 230,	% 3
-													Char =/= 231,	% 3
-													Char =/= 232,	% 3
-													Char =/= 233,	% 3
-													Char =/= 238,	% 3
-													Char =/= 239 ->	% 3
-    common:loginfo("utf8 (1): ~p", [Char]),
+utf8_to_gbk(LogPid, [Char | S], U, RowIndex, ColIndex) when Char =/= 63,	% 1
+                                                            Char =/= 194,	% 2
+        													Char =/= 195,	% 2
+		          											Char =/= 196,	% 2
+					           								Char =/= 197,	% 2
+								        					Char =/= 199,	% 2
+										          			Char =/= 201,	% 2
+        													Char =/= 203,	% 2
+		      			     								Char =/= 206,	% 2
+				        									Char =/= 207,	% 2
+							         						Char =/= 208,	% 2
+									           				Char =/= 226,	% 3
+												            Char =/= 227,	% 3
+        													Char =/= 228,	% 3
+		          											Char =/= 229,	% 3
+					           								Char =/= 230,	% 3
+								        					Char =/= 231,	% 3
+										          			Char =/= 232,	% 3
+                                                            Char =/= 233,	% 3
+        													Char =/= 238,	% 3
+		          											Char =/= 239 ->	% 3
     case Char of
         10 -> 
 			utf8_to_gbk(S, [Char | U], RowIndex + 1, 0);
         _  -> 
 			utf8_to_gbk(S, [Char | U], RowIndex, ColIndex + 1)
     end;     
-utf8_to_gbk([A, B, C | S], U, RowIndex, ColIndex) when A == 226 orelse  % 3
-													   A == 227 orelse  % 3
-													   A == 228 orelse  % 3
-													   A == 229 orelse  % 3
-													   A == 230 orelse  % 3
-													   A == 231 orelse  % 3
-													   A == 232 orelse  % 3
-													   A == 233 orelse  % 3
-													   A == 238 orelse  % 3
-													   A == 239 ->	% 3
-    %common:loginfo("utf8 (2): ~p", [{utf8, A, B, C}]),
+utf8_to_gbk(LogPid, [A, B, C | S], U, RowIndex, ColIndex) when A == 226 orelse  % 3
+        													   A == 227 orelse  % 3
+		          											   A == 228 orelse  % 3
+					           								   A == 229 orelse  % 3
+								        					   A == 230 orelse  % 3
+										          			   A == 231 orelse  % 3
+													           A == 232 orelse  % 3
+        													   A == 233 orelse  % 3
+		          											   A == 238 orelse  % 3
+					           								   A == 239 ->	% 3
     case get({utf8, A, B, C}) of
         undefined ->
-            common:loginfo("utf8 not found: ~p, ~p", [{utf8, A, B, C}, {index, RowIndex, ColIndex}]),
+            log:log_err(LogPid, "utf8 not found: ~p, ~p", [{utf8, A, B, C}, {index, RowIndex, ColIndex}]),
             utf8_to_gbk(S, U, RowIndex, ColIndex + 2);
         Other ->  
 			utf8_to_gbk(S, list_append(Other, U), RowIndex, ColIndex + 2)
     end;    
-utf8_to_gbk([A, B | S], U, RowIndex, ColIndex) when A == 194 orelse  % 2
-													A == 195 orelse  % 2
-													A == 196 orelse  % 2
-													A == 197 orelse  % 2
-													A == 199 orelse  % 2
-													A == 201 orelse  % 2
-													A == 203 orelse  % 2
-													A == 206 orelse  % 2
-													A == 207 orelse  % 2
-													A == 208 ->	% 2
-    %common:loginfo("utf8 (3): ~p", [{utf8, A, B}]),
+utf8_to_gbk(LogPid, [A, B | S], U, RowIndex, ColIndex) when A == 194 orelse  % 2
+        													A == 195 orelse  % 2
+		          											A == 196 orelse  % 2
+					           								A == 197 orelse  % 2
+								        					A == 199 orelse  % 2
+										          			A == 201 orelse  % 2
+        													A == 203 orelse  % 2
+		          											A == 206 orelse  % 2
+					           								A == 207 orelse  % 2
+								        					A == 208 ->	% 2
     case get({utf8, A, B}) of
         undefined ->
-            common:loginfo("utf8 not found: ~p, ~p", [{utf8, A, B}, {index, RowIndex, ColIndex}]),
+            log:log_err(LogPid, "utf8 not found: ~p, ~p", [{utf8, A, B}, {index, RowIndex, ColIndex}]),
             utf8_to_gbk(S, U, RowIndex, ColIndex + 2);
         Other ->  
 			utf8_to_gbk(S, list_append(Other, U), RowIndex, ColIndex + 2)
     end;    
-utf8_to_gbk([A | S], U, RowIndex, ColIndex) when A == 63 ->	% 1
-    %common:loginfo("utf8 (4): ~p", [{utf8, A}]),
+utf8_to_gbk(LogPid, [A | S], U, RowIndex, ColIndex) when A == 63 ->	% 1
     case get({utf8, A}) of
         undefined ->
-            common:loginfo("utf8 not found: ~p, ~p", [{utf8, A}, {index, RowIndex, ColIndex}]),
+            log:log_err(LogPid, "utf8 not found: ~p, ~p", [{utf8, A}, {index, RowIndex, ColIndex}]),
             utf8_to_gbk(S, U, RowIndex, ColIndex + 2);
         Other ->  
 			utf8_to_gbk(S, list_append(Other, U), RowIndex, ColIndex + 2)
     end;    
-utf8_to_gbk([Char | S], U, RowIndex, ColIndex) ->
-    %common:loginfo("utf8 (5): ~p", [Char]),
+utf8_to_gbk(LogPid, [Char | S], U, RowIndex, ColIndex) ->
     case Char of
         10 -> 
 			utf8_to_gbk(S, [Char | U], RowIndex + 1, 0);
         _  -> 
 			utf8_to_gbk(S, [Char | U], RowIndex, ColIndex + 1)
     end;     
-utf8_to_gbk([], U, _RowIndex, _ColIndex) ->
-    %common:loginfo("utf8 (6)"),
+utf8_to_gbk(LogPid, [], U, _RowIndex, _ColIndex) ->
     lists:reverse(U).
      
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Description:
-%
+%   A reversed append
 % Parameter:
-%
+%   []      :
+%   List    :
 % Return:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
