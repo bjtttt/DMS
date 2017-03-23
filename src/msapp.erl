@@ -238,37 +238,8 @@ create_processes(LogPid, Redis) ->
     CCPid = spawn(fun() -> cc_helper:code_convertor_process(LogPid) end),
     ets:insert(msgservertable, {ccpid, CCPid}),                        
     
-    VDRLogPid = spawn(fun() -> log_vdr:vdr_log_process([]) end),
+    VDRLogPid = spawn(fun() -> log_vdr:vdr_log_process(LogPid, []) end),
     ets:insert(msgservertable, {vdrlogpid, VDRLogPid}).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-% Parameter :
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-save_msg_4_vdr(VDRID, FromVDR, MsgBin, DateTime) ->
-    if
-        VDRID =/= undefined ->
-            File = "/tmp/log/vdr/VDR" ++ integer_to_list(VDRID) ++ ".log",
-            case file:open(File, [append]) of
-                {ok, IOFile} ->
-                    {Year,Month,Day,Hour,Min,Second} = DateTime,
-                    case FromVDR of
-                        true ->
-                            io:format(IOFile, "(~p ~p ~p, ~p:~p:~p) VDR=> ~p~n", [Year,Month,Day,Hour,Min,Second,MsgBin]);
-                        _ ->
-                            io:format(IOFile, "(~p ~p ~p, ~p:~p:~p) =>VDR ~p~n", [Year,Month,Day,Hour,Min,Second,MsgBin])
-                    end,
-                    file:close(IOFile);
-                {error, Reason} ->
-                    mslog:logerr("Cannot open ~p : ~p", [File, Reason]);
-                _ ->
-                    mslog:logerr("Cannot open ~p : unknown", [File])
-            end;
-        true ->
-            ok
-    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
