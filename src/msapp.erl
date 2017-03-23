@@ -238,21 +238,8 @@ create_processes(LogPid, Redis) ->
     CCPid = spawn(fun() -> cc_helper:code_convertor_process(LogPid) end),
     ets:insert(msgservertable, {ccpid, CCPid}),                        
     
-    VdrTablePid = spawn(fun() -> vdrtable_insert_delete_process() end),
-    ets:insert(msgservertable, {vdrtablepid, VdrTablePid}),    
-    
-    % Do we really need it?
-    DriverTablePid = spawn(fun() -> drivertable_insert_delete_process() end),
-    ets:insert(msgservertable, {drivertablepid, DriverTablePid}),
-    
-    LastPosTablePid = spawn(fun() -> lastpostable_insert_delete_process() end),
-    ets:insert(msgservertable, {lastpostablepid, LastPosTablePid}),
-    
-    VDRLogPid = spawn(fun() -> vdr_log_process([]) end),
-    ets:insert(msgservertable, {vdrlogpid, VDRLogPid}),
-    
-    VDROnlinePid = spawn(fun() -> vdr_online_table_process([], []) end),
-    ets:insert(msgservertable, {vdronlinepid, VDROnlinePid}).
+    VDRLogPid = spawn(fun() -> log_vdr:vdr_log_process([]) end),
+    ets:insert(msgservertable, {vdrlogpid, VDRLogPid}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %

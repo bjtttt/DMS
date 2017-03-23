@@ -131,8 +131,8 @@ code_convertor_process(LogPid) ->
             ok;
         {Pid, gbk2utf8, Source} ->
             try
-                Destination = ccprocessor:to_utf8(LogPid, Source),
-                log:log_special(LogPid, "code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination]),
+                Destination = cc_processor:to_utf8(LogPid, Source),
+                log:log_special(LogPid, ?DISP_SPEC_CC, "code_convertor_process : source GBK : ~p, dest UTF8 : ~p", [Source, Destination]),
                 Pid ! Destination
             catch
                 _:Reason ->
@@ -143,7 +143,7 @@ code_convertor_process(LogPid) ->
         {Pid, utf82gbk, Source} ->
             try
                 Destination = cc_processor:to_gbk(LogPid, Source),
-                log:log_special(LogPid, "code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination]),
+                log:log_special(LogPid, ?DISP_SPEC_CC, "code_convertor_process : source UTF8 : ~p, dest GBK : ~p", [Source, Destination]),
                 Pid ! Destination
             catch
                 _:Reason ->
