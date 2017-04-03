@@ -224,7 +224,7 @@ create_directories(LogPid) ->
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 create_processes(LogPid, Redis) ->
-    ConnInfoPid = spawn(fun() -> connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
+    ConnInfoPid = spawn(fun() -> conn_info:connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0)) end),
     ets:insert(msgservertable, {conninfopid, ConnInfoPid}),
     
     if
@@ -554,36 +554,6 @@ stop(_State) ->
             VDROnlinePid ! stop
     end,
     mslog:loghint("Message server stops.").
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Description :
-%        Maintain the connection status information
-%       Please refer to include\header.hrl for details
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-connection_info_process(List) ->
-    Len = length(List),
-    if
-        Len =:= ?CONN_STAT_INFO_COUNT ->
-            receive
-                stop ->
-                    ok;
-                clear ->
-                    connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0));
-                {clear, ClearIndex} ->
-                    connection_info_process(lists:sublist(List, ClearIndex - 1) ++ [0] ++ lists:nthtail(ClearIndex + 1, List));
-                {Pid, count} ->
-                    Pid ! List;
-                {record, Index} ->
-                    connection_info_process(lists:sublist(List, Index - 1) ++ [lists:nth(Index, List) + 1] ++ lists:nthtail(Index + 1, List));
-                _ ->
-                    connection_info_process(List)
-            end;
-        true ->
-            connection_info_process(lists:duplicate(?CONN_STAT_INFO_COUNT, 0))
-    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
